@@ -11,3 +11,17 @@ class PatientReading {
     required this.spo2,
   });
 }
+
+class Reading {
+  final String type;
+  final String value;
+  final DateTime date;
+  final String? notes;
+
+  Reading({
+    required this.type,
+    required this.value,
+    required this.date,
+    this.notes,
+  });
+}

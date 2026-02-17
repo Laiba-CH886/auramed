@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:auramed/providers/auth_provider.dart';
 import 'package:auramed/models/user.dart';
-
-// Import new screens
+import 'package:auramed/screens/edit_profile_screen.dart';
 import 'package:auramed/screens/app_setting_screen.dart';
 import 'package:auramed/screens/privacy_and_security_screen.dart';
 import 'package:auramed/screens/notifications_screen.dart';
-import 'package:auramed/screens/appearance_screen.dart';
+import 'package:auramed/screens/Appearance_screen.dart';
 import 'package:auramed/screens/Help_and_FAQ_Screen.dart';
 import 'package:auramed/screens/contact_support_screen.dart';
-import 'package:auramed/screens/about_auramed_screen.dart';
+import 'package:auramed/screens/about_AuraMed_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   static const routeName = '/profile';
@@ -24,236 +23,99 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FF),
       appBar: AppBar(
-        title: const Text("Profile"),
+        title: const Text("My Profile"),
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.pushNamed(context, AppSettingsScreen.routeName),
+          )
+        ],
       ),
-
       body: u == null
           ? const Center(child: Text("Not logged in"))
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-
-            // =======================
-            //   PROFILE HEADER CARD
-            // =======================
-            Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF8E9EFF), Color(0xFFB2C2FF)],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  )
-                ],
-              ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withAlpha(77),
-                    ),
-                    child: CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.white,
-                      child: Text(
-                        u.name
-                            .split(' ')
-                            .map((e) => e[0])
-                            .take(2)
-                            .join()
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 15),
-
-                  // User Info
-                  Expanded(
+                  Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          u.name,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: const Color(0xFF8E9EFF),
+                          child: Text(
+                            u.name[0].toUpperCase(),
+                            style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          u.email,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
+                        const SizedBox(height: 16),
+                        Text(u.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        Text(u.email, style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
+                        const SizedBox(height: 12),
+                        Chip(
+                          label: Text(u.role == UserRole.doctor ? 'DOCTOR' : 'PATIENT'),
+                          backgroundColor: const Color(0xFF8E9EFF).withAlpha(30),
+                          labelStyle: const TextStyle(color: Color(0xFF8E9EFF), fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          u.role == UserRole.doctor ? 'Doctor' : 'Patient',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
-                        )
                       ],
                     ),
                   ),
+                  const SizedBox(height: 30),
+
+                  const Text("Account & Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  _settingsTile(Icons.person_outline, "Edit Profile", "Update your personal info", () => Navigator.pushNamed(context, EditProfileScreen.routeName)),
+                  _settingsTile(Icons.lock_outline, "Privacy & Security", "Password and data protection", () => Navigator.pushNamed(context, PrivacySecurityScreen.routeName)),
+                  _settingsTile(Icons.notifications_none, "Notifications", "Manage your alerts", () => Navigator.pushNamed(context, NotificationsScreen.routeName)),
+                  _settingsTile(Icons.palette_outlined, "Appearance", "Theme and font sizes", () => Navigator.pushNamed(context, AppearanceScreen.routeName)),
+                  _settingsTile(Icons.help_outline, "Help & FAQ", "Common questions", () => Navigator.pushNamed(context, HelpFaqScreen.routeName)),
+                  _settingsTile(Icons.support_agent, "Contact Support", "Get technical help", () => Navigator.pushNamed(context, ContactSupportScreen.routeName)),
+                  _settingsTile(Icons.info_outline, "About AuraMed", "Version and legal info", () => Navigator.pushNamed(context, AboutAuraMedScreen.routeName)),
+
+                  const SizedBox(height: 32),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        auth.logout();
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
+                      },
+                      icon: const Icon(Icons.logout, color: Colors.redAccent),
+                      label: const Text("SIGN OUT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.redAccent),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // EDIT PROFILE BUTTON
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C73FF),
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () {},
-              icon: const Icon(Icons.edit),
-              label: const Text("Edit Profile"),
-            ),
-
-            const SizedBox(height: 25),
-
-            // =====================
-            //   ACCOUNT SETTINGS
-            // =====================
-            const Text(
-              "Account Settings",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            _settingsTile(
-              Icons.settings,
-              "App Settings",
-                  () => Navigator.pushNamed(context, AppSettingsScreen.routeName),
-            ),
-            _settingsTile(
-              Icons.lock,
-              "Privacy & Security",
-                  () => Navigator.pushNamed(context, PrivacySecurityScreen.routeName),
-            ),
-            _settingsTile(
-              Icons.notifications,
-              "Notifications",
-                  () => Navigator.pushNamed(context, NotificationsScreen.routeName),
-            ),
-            _settingsTile(
-              Icons.brightness_6,
-              "Appearance (Dark Mode)",
-                  () => Navigator.pushNamed(context, AppearanceScreen.routeName),
-            ),
-
-            const SizedBox(height: 25),
-
-            // =====================
-            //       SUPPORT
-            // =====================
-            const Text(
-              "Support",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            _settingsTile(
-              Icons.help_outline,
-              "Help & FAQ",
-                  () => Navigator.pushNamed(context, HelpFaqScreen.routeName),
-            ),
-            _settingsTile(
-              Icons.mail_outline,
-              "Contact Support",
-                  () => Navigator.pushNamed(context, ContactSupportScreen.routeName),
-            ),
-
-            const SizedBox(height: 25),
-
-            // =====================
-            //         ABOUT
-            // =====================
-            const Text(
-              "About",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            _settingsTile(
-              Icons.info_outline,
-              "About AuraMed",
-                  () => Navigator.pushNamed(context, AboutAuraMedScreen.routeName),
-            ),
-
-            const SizedBox(height: 25),
-
-            // LOGOUT BUTTON
-            ElevatedButton.icon(
-              onPressed: () {
-                auth.logout();
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text("Sign Out"),
-              style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: Colors.redAccent,
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _settingsTile(IconData icon, String title, VoidCallback onTap) {
+  Widget _settingsTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
-        leading: Icon(icon, color: Colors.black54),
-        title: Text(title, style: const TextStyle(fontSize: 16)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: const Color(0xFF8E9EFF).withAlpha(20), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: const Color(0xFF8E9EFF), size: 22),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+        trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
       ),
     );
   }

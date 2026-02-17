@@ -11,20 +11,17 @@ class AuthProvider extends ChangeNotifier {
   List<UserModel> get registeredUsers => _registeredUsers;
 
   AuthProvider() {
-    // Initialize with some sample patient users who have "registered"
     _initializeSampleData();
   }
 
   void _initializeSampleData() {
-    // Add some pre-registered patients (simulating existing users)
     _registeredUsers = [
-      UserModel(uid: 'p1', name: 'Ali Khan', email: 'ali@test.com', role: UserRole.patient),
-      UserModel(uid: 'p2', name: 'Sarah Ali', email: 'sarah@test.com', role: UserRole.patient),
+      UserModel(uid: 'p1', name: 'Ali Khan', email: 'ali@test.com', role: UserRole.patient, phone: '+923001234567', age: 25, bloodGroup: 'A+'),
+      UserModel(uid: 'p2', name: 'Sarah Ali', email: 'sarah@test.com', role: UserRole.patient, phone: '+923007654321', age: 22, bloodGroup: 'O-'),
       UserModel(uid: 'p3', name: 'Mike Johnson', email: 'mike@test.com', role: UserRole.patient),
       UserModel(uid: 'd1', name: 'Dr. Fatima', email: 'doctor@test.com', role: UserRole.doctor),
     ];
 
-    // Initialize sample readings for patients
     _patientReadings['p1'] = List.generate(7, (i) {
       final now = DateTime.now().subtract(Duration(hours: 6 - i));
       return PatientReading(
@@ -56,11 +53,34 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
-  // Enhanced login that tracks real users
+  Future<void> updateProfile({
+    required String name,
+    required String phone,
+    required int age,
+    required String bloodGroup,
+  }) async {
+    if (_user == null) return;
+
+    // Update current user
+    _user = _user!.copyWith(
+      name: name,
+      phone: phone,
+      age: age,
+      bloodGroup: bloodGroup,
+    );
+
+    // Update in registered users list
+    final index = _registeredUsers.indexWhere((u) => u.uid == _user!.uid);
+    if (index != -1) {
+      _registeredUsers[index] = _user!;
+    }
+
+    notifyListeners();
+  }
+
   Future<bool> login(String email, String password) async {
     await Future.delayed(const Duration(milliseconds: 600));
 
-    // Check if user already exists in registered users
     final existingUser = _registeredUsers.firstWhere(
           (user) => user.email.toLowerCase() == email.toLowerCase(),
       orElse: () => UserModel(uid: '', name: '', email: '', role: UserRole.patient),
@@ -76,51 +96,41 @@ class AuthProvider extends ChangeNotifier {
         email.toLowerCase().contains('dr ')) {
       role = UserRole.doctor;
 
-      // If doctor exists, use existing data, else create new
       if (existingUser.uid.isNotEmpty && existingUser.role == UserRole.doctor) {
         uid = existingUser.uid;
-        name = existingUser.name;
+        _user = existingUser;
       } else {
         uid = 'd_${DateTime.now().millisecondsSinceEpoch}';
         name = 'Dr. ${_getNameFromEmail(email)}';
-        // Add new doctor to registered users
-        _registeredUsers.add(UserModel(uid: uid, name: name, email: email, role: role));
+        _user = UserModel(uid: uid, name: name, email: email, role: role);
+        _registeredUsers.add(_user!);
       }
     } else {
       role = UserRole.patient;
 
-      // If patient exists, use existing data, else create new
       if (existingUser.uid.isNotEmpty && existingUser.role == UserRole.patient) {
         uid = existingUser.uid;
-        name = existingUser.name;
+        _user = existingUser;
       } else {
         uid = 'p_${DateTime.now().millisecondsSinceEpoch}';
         name = _getNameFromEmail(email);
-        // Add new patient to registered users
-        final newPatient = UserModel(uid: uid, name: name, email: email, role: role);
-        _registeredUsers.add(newPatient);
-
-        // Initialize empty readings for new patient
+        _user = UserModel(uid: uid, name: name, email: email, role: role);
+        _registeredUsers.add(_user!);
         _patientReadings[uid] = [];
       }
     }
-
-    _user = UserModel(uid: uid, name: name, email: email, role: role);
 
     notifyListeners();
     return true;
   }
 
-  // Enhanced login with more role detection options
   Future<bool> loginEnhanced(String email, String password) async {
-    return login(email, password); // Now using the main login method
+    return login(email, password);
   }
 
-  // Simple login that always returns doctor for testing
   Future<bool> loginAsDoctor(String email, String password) async {
     await Future.delayed(const Duration(milliseconds: 600));
 
-    // Check if doctor already exists
     final existingDoctor = _registeredUsers.firstWhere(
           (user) => user.role == UserRole.doctor,
       orElse: () => UserModel(uid: '', name: '', email: '', role: UserRole.patient),
@@ -149,16 +159,10 @@ class AuthProvider extends ChangeNotifier {
     'd_${DateTime.now().millisecondsSinceEpoch}' :
     'p_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Create new user
     final newUser = UserModel(uid: uid, name: name, email: email, role: role);
-
-    // Add to registered users list
     _registeredUsers.add(newUser);
-
-    // Set as current user
     _user = newUser;
 
-    // Initialize empty readings for new patients
     if (role == UserRole.patient) {
       _patientReadings[uid] = [];
     }
@@ -172,19 +176,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Get REAL patients from registered users
   List<Map<String, dynamic>> getAssignedPatients() {
-    // Filter only patient users from registered users
     final patientUsers = _registeredUsers.where((user) => user.role == UserRole.patient).toList();
 
-    // Convert to the format expected by the dashboard
-    final patients = patientUsers.map((patient) {
+    return patientUsers.map((patient) {
       final patientId = patient.uid;
       final readings = _patientReadings[patientId] ?? [];
       final lastReading = readings.isNotEmpty ? readings.last : null;
-
-      // Calculate age from email or use default
-      final age = _calculateAgeFromEmail(patient.email);
+      final age = patient.age ?? _calculateAgeFromEmail(patient.email);
 
       String lastReadingText = 'No readings yet';
       if (lastReading != null) {
@@ -201,66 +200,47 @@ class AuthProvider extends ChangeNotifier {
         'readingsCount': readings.length,
       };
     }).toList();
-
-    return patients;
   }
 
-  // Get readings for a specific patient id
   List<PatientReading> readingsFor(String patientId) {
-    final readings = _patientReadings[patientId] ?? [];
-    return readings;
+    return _patientReadings[patientId] ?? [];
   }
 
-  // for patient screen: return readings for current user
   List<PatientReading> getMyReadings() {
-    if (_user == null) {
-      return [];
-    }
+    if (_user == null) return [];
 
     if (_user!.role == UserRole.doctor) {
-      // Doctor sees sample data of first patient
       return _patientReadings['p1'] ?? [];
     } else {
-      // Patient sees their own readings
-      final readings = _patientReadings[_user!.uid] ?? [];
-      return readings;
+      return _patientReadings[_user!.uid] ?? [];
     }
   }
 
-  // Add a new reading for current patient
   void addReading(PatientReading reading) {
-    if (_user == null || _user!.role != UserRole.patient) {
-      return;
-    }
+    if (_user == null || _user!.role != UserRole.patient) return;
 
     final patientId = _user!.uid;
     if (_patientReadings[patientId] == null) {
       _patientReadings[patientId] = [];
     }
 
-    _patientReadings[patientId]!.insert(0, reading); // Add to beginning
+    _patientReadings[patientId]!.insert(0, reading);
     notifyListeners();
   }
 
-  // Helper method to extract name from email
   String _getNameFromEmail(String email) {
     final namePart = email.split('@').first;
-    // Capitalize first letter of each word
     return namePart.split('.').map((part) {
       if (part.isEmpty) return '';
       return part[0].toUpperCase() + part.substring(1);
     }).join(' ');
   }
 
-  // Helper method to calculate age (for demo purposes)
   int _calculateAgeFromEmail(String email) {
-    // In a real app, this would come from user profile
-    // For demo, we'll use a simple hash-based approach
     final hash = email.hashCode.abs();
-    return 25 + (hash % 30); // Age between 25-55
+    return 25 + (hash % 30);
   }
 
-  // Method to simulate patient activity (for testing)
   void simulatePatientActivity() {
     final patients = _registeredUsers.where((user) => user.role == UserRole.patient).toList();
     for (final patient in patients) {
@@ -268,7 +248,6 @@ class AuthProvider extends ChangeNotifier {
         _patientReadings[patient.uid] = [];
       }
 
-      // Add a new reading for each patient
       final newReading = PatientReading(
         timestamp: DateTime.now(),
         heartRate: 60 + (patient.uid.hashCode % 40),
@@ -282,7 +261,6 @@ class AuthProvider extends ChangeNotifier {
   }
 }
 
-// Add this extension to your UserModel for better debugging
 extension UserModelExtensions on UserModel {
   Map<String, dynamic> toJson() {
     return {

@@ -2,12 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:auramed/providers/auth_provider.dart';
 import 'package:auramed/widgets/top_app_bar.dart';
-import 'package:auramed/screens/patient_detail_screen.dart';
 import 'package:auramed/screens/profile_screen.dart';
+import 'package:auramed/screens/appointments/appointments_list_screen.dart';
+import 'package:auramed/screens/app_setting_screen.dart';
+import 'package:auramed/screens/consultation/consultation_list_screen.dart';
 
-class DoctorDashboard extends StatelessWidget {
+class DoctorDashboard extends StatefulWidget {
   static const routeName = '/doctor_dashboard';
   const DoctorDashboard({super.key});
+
+  @override
+  State<DoctorDashboard> createState() => _DoctorDashboardState();
+}
+
+class _DoctorDashboardState extends State<DoctorDashboard> {
+  int _selectedIndex = 0;
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    switch (index) {
+      case 1:
+        Navigator.pushNamed(context, AppointmentsListScreen.routeName);
+        break;
+      case 2:
+        Navigator.pushNamed(context, ProfileScreen.routeName);
+        break;
+      case 3:
+        Navigator.pushNamed(context, AppSettingsScreen.routeName);
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,263 +42,184 @@ class DoctorDashboard extends StatelessWidget {
     final patients = auth.getAssignedPatients();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F6FF),
       appBar: TopAppBar(
-        title: 'Doctor Dashboard',
+        title: 'Doctor Portal',
         showProfile: true,
         onProfileTap: () => Navigator.pushNamed(context, ProfileScreen.routeName),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // WELCOME HEADER
+            Text(
+              "Welcome, Dr. ${auth.user?.name.split(' ').last ?? 'Doctor'} 👋",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 16),
+
+            // QUICK STATS CARD
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.deepPurple.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6C73FF), Color(0xFF8E9EFF)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 10, offset: const Offset(0, 4))
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Welcome, ${auth.user?.name ?? 'Doctor'}! 🩺',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
+                  const Row(
+                    children: [
+                      Icon(Icons.analytics_outlined, color: Colors.white70, size: 20),
+                      SizedBox(width: 8),
+                      Text("Quick Stats", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'You have ${patients.length} patients under your care',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.deepPurple.withValues(alpha: 0.7),
-                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildStatItem("Pending", "3"),
+                      _buildStatDivider(),
+                      _buildStatItem("Today", "5"),
+                      _buildStatDivider(),
+                      _buildStatItem("Done", "2"),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            
+            const SizedBox(height: 32),
+            
+            // ACTION GRID
+            const Text(
+              "Management Tools",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 16),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.1,
               children: [
-                Text(
-                  'Your Patients',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                _ActionGridItem(
+                  icon: Icons.calendar_month_outlined,
+                  label: "Appointments",
+                  color: Colors.blue.shade50,
+                  iconColor: Colors.blue.shade700,
+                  onTap: () => Navigator.pushNamed(context, AppointmentsListScreen.routeName),
                 ),
-                Chip(
-                  label: Text('${patients.length} patients'),
-                  backgroundColor: Colors.deepPurple.withValues(alpha: 0.1),
+                _ActionGridItem(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: "Consultation",
+                  color: Colors.purple.shade50,
+                  iconColor: Colors.purple.shade700,
+                  onTap: () => Navigator.pushNamed(context, ConsultationListScreen.routeName),
+                ),
+                _ActionGridItem(
+                  icon: Icons.person_outline_rounded,
+                  label: "Profile",
+                  color: Colors.orange.shade50,
+                  iconColor: Colors.orange.shade700,
+                  onTap: () => Navigator.pushNamed(context, ProfileScreen.routeName),
+                ),
+                _ActionGridItem(
+                  icon: Icons.settings_outlined,
+                  label: "Settings",
+                  color: Colors.green.shade50,
+                  iconColor: Colors.green.shade700,
+                  onTap: () => Navigator.pushNamed(context, AppSettingsScreen.routeName),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: patients.isEmpty
-                  ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text(
-                      'No patients yet',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Patients will appear here once they register',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.builder(
-                itemCount: patients.length,
-                itemBuilder: (ctx, i) {
-                  final patient = patients[i];
-                  final lastReading = patient['last'];
-                  final age = patient['age'] is int ? patient['age'].toString() : 'N/A';
-
-                  String lastReadingText = 'No readings yet';
-                  if (lastReading != null) {
-                    lastReadingText = '${lastReading.heartRate} bpm • ${lastReading.bp}';
-                  }
-
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        PatientDetailScreen.routeName,
-                        arguments: {
-                          'id': patient['id'],
-                          'name': patient['name'],
-                          'email': patient['email'],
-                        },
-                      );
-                    },
-                    child: _PatientCard(
-                      name: patient['name'] ?? 'Unknown Patient',
-                      age: age,
-                      lastReading: lastReadingText,
-                      email: patient['email'],
-                    ),
-                  );
-                },
-              ),
             ),
           ],
         ),
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF6C73FF),
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), label: 'Appts'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+        ],
+      ),
     );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(height: 30, width: 1, color: Colors.white24);
   }
 }
 
-class _PatientCard extends StatelessWidget {
-  final String name;
-  final String age;
-  final String lastReading;
-  final String? email;
+class _ActionGridItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback onTap;
 
-  const _PatientCard({
-    required this.name,
-    required this.age,
-    required this.lastReading,
-    this.email,
+  const _ActionGridItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    required this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    'Age $age',
-                    style: const TextStyle(
-                      color: Colors.deepPurple,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (email != null && email!.isNotEmpty) ...[
-              const SizedBox(height: 6),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: Icon(icon, color: iconColor, size: 30),
+              ),
+              const SizedBox(height: 12),
               Text(
-                email!,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-                overflow: TextOverflow.ellipsis,
+                label,
+                style: TextStyle(color: iconColor, fontWeight: FontWeight.bold, fontSize: 15),
               ),
             ],
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.monitor_heart_outlined,
-                    size: 20,
-                    color: Colors.deepPurple.shade400,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Last Reading',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          lastReading,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'View Details',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 12,
-                      color: Colors.blue.shade700,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

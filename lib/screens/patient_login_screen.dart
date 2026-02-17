@@ -243,12 +243,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen>
                                 children: [
                                   const Text("Don't have an account?"),
                                   TextButton(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => const PatientSignupScreen(),
-                                      ),
-                                    ),
+                                    onPressed: () => Navigator.pushNamed(context, PatientSignupScreen.routeName),
                                     child: const Text(
                                       "Sign up",
                                       style: TextStyle(fontWeight: FontWeight.bold),
