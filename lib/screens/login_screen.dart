@@ -1,4 +1,3 @@
-// dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:auramed/models/user.dart';
@@ -27,10 +26,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => loading = true);
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final ok = await auth.login(email.trim(), password);
+    final result = await auth.login(email.trim(), password);
+    final bool ok = result['success'] == true;
 
-    setState(() => loading = false);
     if (!mounted) return;
+    setState(() => loading = false);
 
     if (ok) {
       if (auth.user?.role == UserRole.doctor) {
@@ -39,8 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, PatientDashboard.routeName);
       }
     } else {
+      final String msg = auth.errorMessage ?? 'Login failed';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed')),
+        SnackBar(content: Text(msg)),
       );
     }
   }
@@ -60,12 +61,8 @@ class _LoginScreenState extends State<LoginScreen> {
               // ---------- Logo and App Name ----------
               Column(
                 children: [
-                  Image.asset(
-                    'assets/images/logo.png', // Make sure this path is correct
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.contain,
-                  ),
+                  // Checking if logo exists, if not using an icon as fallback
+                  const Icon(Icons.local_hospital, size: 80, color: Colors.teal),
                   const SizedBox(height: 10),
                   Text(
                     'AuraMed',
@@ -160,8 +157,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const Text("Don't have an account?"),
                         TextButton(
-                          onPressed: () =>
-                              Navigator.pushNamed(context, SignupScreen.routeName),
+                          onPressed: () {
+                            // Check if SignupScreen exists in main.dart or routes
+                            Navigator.pushNamed(context, SignupScreen.routeName);
+                          },
                           child: const Text(
                             'Create one',
                             style: TextStyle(fontWeight: FontWeight.bold),

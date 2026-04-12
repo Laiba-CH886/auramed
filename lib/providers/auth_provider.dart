@@ -1,58 +1,241 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:auramed/models/user.dart';
 import 'package:auramed/models/reading.dart';
+import 'package:auramed/services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  // ── Services ──────────────────────────────────────────────────────────────
+  final AuthService _authService = AuthService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  // ── State ─────────────────────────────────────────────────────────────────
   UserModel? _user;
-  List<UserModel> _registeredUsers = []; // Track ALL registered users
+  List<UserModel> _registeredUsers = [];
+  bool _isLoading = false;
+  String? _errorMessage;
   final Map<String, List<PatientReading>> _patientReadings = {};
 
+  // ── Getters ───────────────────────────────────────────────────────────────
   UserModel? get user => _user;
   List<UserModel> get registeredUsers => _registeredUsers;
+  bool get isLoading => _isLoading;
+  bool get isLoggedIn => _user != null;
+  String? get errorMessage => _errorMessage;
+
+  /// Raw Firebase user — used for displayName / photoURL fallback
+  User? get firebaseUser => _auth.currentUser;
 
   AuthProvider() {
-    _initializeSampleData();
+    _auth.authStateChanges().listen(_onAuthStateChanged);
+    _loadAllUsers();
   }
 
-  void _initializeSampleData() {
-    _registeredUsers = [
-      UserModel(uid: 'p1', name: 'Ali Khan', email: 'ali@test.com', role: UserRole.patient, phone: '+923001234567', age: 25, bloodGroup: 'A+'),
-      UserModel(uid: 'p2', name: 'Sarah Ali', email: 'sarah@test.com', role: UserRole.patient, phone: '+923007654321', age: 22, bloodGroup: 'O-'),
-      UserModel(uid: 'p3', name: 'Mike Johnson', email: 'mike@test.com', role: UserRole.patient),
-      UserModel(uid: 'd1', name: 'Dr. Fatima', email: 'doctor@test.com', role: UserRole.doctor),
-    ];
-
-    _patientReadings['p1'] = List.generate(7, (i) {
-      final now = DateTime.now().subtract(Duration(hours: 6 - i));
-      return PatientReading(
-          timestamp: now,
-          heartRate: 60 + i * 2,
-          bp: '${110 + i}/${70 + i}',
-          spo2: 96 + (i % 2)
-      );
-    });
-
-    _patientReadings['p2'] = List.generate(7, (i) {
-      final now = DateTime.now().subtract(Duration(days: i));
-      return PatientReading(
-          timestamp: now,
-          heartRate: 70 + i,
-          bp: '${120 + i}/${78 + i}',
-          spo2: 95 + (i % 2)
-      );
-    });
-
-    _patientReadings['p3'] = List.generate(5, (i) {
-      final now = DateTime.now().subtract(Duration(hours: i * 2));
-      return PatientReading(
-          timestamp: now,
-          heartRate: 65 + i,
-          bp: '${115 + i}/${75 + i}',
-          spo2: 97
-      );
-    });
+  // ── Auth State Listener ───────────────────────────────────────────────────
+  Future<void> _onAuthStateChanged(User? fbUser) async {
+    if (fbUser == null) {
+      _user = null;
+      _patientReadings.clear();
+      notifyListeners();
+      return;
+    }
+    await _loadUserFromFirestore(fbUser.uid);
   }
 
+  Future<void> _loadAllUsers() async {
+    try {
+      final snapshot = await _firestore.collection('users').get();
+      _registeredUsers = snapshot.docs
+          .map((doc) => UserModel.fromFirestore(doc.data(), doc.id))
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('AuthProvider: Error loading all users: $e');
+    }
+  }
+
+  Future<void> _loadUserFromFirestore(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      final fb = firebaseUser;
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final roleStr = data['role'] as String? ?? 'patient';
+        final role =
+        roleStr == 'doctor' ? UserRole.doctor : UserRole.patient;
+
+        _user = UserModel(
+          uid: uid,
+          name: data['name'] as String? ??
+              fb?.displayName ??
+              _getNameFromEmail(data['email'] as String? ?? ''),
+          email: data['email'] as String? ?? fb?.email ?? '',
+          role: role,
+          phone: data['phone'] as String?,
+          age: data['age'] as int?,
+          bloodGroup: data['bloodGroup'] as String?,
+          photoUrl: data['photoUrl'] as String? ?? fb?.photoURL,
+        );
+
+        if (role == UserRole.patient && _patientReadings[uid] == null) {
+          _patientReadings[uid] = [];
+          await _loadReadingsFromFirestore(uid);
+        }
+      } else {
+        if (fb != null) {
+          _user = UserModel(
+            uid: uid,
+            name: fb.displayName ?? _getNameFromEmail(fb.email ?? ''),
+            email: fb.email ?? '',
+            role: UserRole.patient,
+            photoUrl: fb.photoURL,
+          );
+          await _firestore.collection('users').doc(uid).set({
+            'uid': uid,
+            'name': _user!.name,
+            'email': _user!.email,
+            'role': 'patient',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('AuthProvider: Error loading user from Firestore: $e');
+    }
+    notifyListeners();
+  }
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _authService.signInWithEmail(
+      email: email,
+      password: password,
+    );
+
+    if (result['success'] == true) {
+      await _loadUserFromFirestore(result['uid'] as String);
+    } else {
+      _errorMessage = result['message'] as String?;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return result;
+  }
+
+  // ── Signup ────────────────────────────────────────────────────────────────
+  Future<bool> signup(
+      String name, String email, String password, UserRole role) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final UserCredential credential =
+      await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final User? fbUser = credential.user;
+      if (fbUser == null) throw Exception("User creation failed");
+
+      await fbUser.updateDisplayName(name);
+
+      final roleStr = role == UserRole.doctor ? 'doctor' : 'patient';
+      await _firestore.collection('users').doc(fbUser.uid).set({
+        'uid': fbUser.uid,
+        'name': name,
+        'email': email,
+        'role': roleStr,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      _user = UserModel(
+        uid: fbUser.uid,
+        name: name,
+        email: email,
+        role: role,
+      );
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = e.message;
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loginEnhanced(String email, String password) async {
+    final result = await login(email, password);
+    return result['success'] == true;
+  }
+
+  // ── Google Sign-In ────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> signInWithGoogle({required String role}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // ✅ 30-second timeout prevents infinite spinner
+      final result = await _authService
+          .signInWithGoogle(role: role)
+          .timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => {
+          'success': false,
+          'message':
+          'Google Sign-In timed out. Please check your internet and try again.',
+        },
+      );
+
+      if (result['success'] == true) {
+        await _loadUserFromFirestore(result['uid'] as String);
+      } else {
+        _errorMessage = result['message'] as String?;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Google Sign-In failed. Please try again.';
+      notifyListeners();
+      return {'success': false, 'message': _errorMessage};
+    }
+  }
+
+  // ── Password Reset ────────────────────────────────────────────────────────
+  Future<void> sendPasswordReset({required String email}) async {
+    await _authService.sendPasswordResetEmail(email: email);
+  }
+
+  // ── Sign Out ──────────────────────────────────────────────────────────────
+  Future<void> logout() async {
+    await _authService.signOut();
+    _user = null;
+    _patientReadings.clear();
+    notifyListeners();
+  }
+
+  // ── Update Profile ────────────────────────────────────────────────────────
   Future<void> updateProfile({
     required String name,
     required String phone,
@@ -61,7 +244,6 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     if (_user == null) return;
 
-    // Update current user
     _user = _user!.copyWith(
       name: name,
       phone: phone,
@@ -69,205 +251,115 @@ class AuthProvider extends ChangeNotifier {
       bloodGroup: bloodGroup,
     );
 
-    // Update in registered users list
-    final index = _registeredUsers.indexWhere((u) => u.uid == _user!.uid);
-    if (index != -1) {
-      _registeredUsers[index] = _user!;
-    }
-
-    notifyListeners();
-  }
-
-  Future<bool> login(String email, String password) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final existingUser = _registeredUsers.firstWhere(
-          (user) => user.email.toLowerCase() == email.toLowerCase(),
-      orElse: () => UserModel(uid: '', name: '', email: '', role: UserRole.patient),
-    );
-
-    UserRole role;
-    String uid;
-    String name;
-
-    if (email.toLowerCase().contains('doc') ||
-        email.toLowerCase().contains('doctor') ||
-        email.toLowerCase().contains('dr.') ||
-        email.toLowerCase().contains('dr ')) {
-      role = UserRole.doctor;
-
-      if (existingUser.uid.isNotEmpty && existingUser.role == UserRole.doctor) {
-        uid = existingUser.uid;
-        _user = existingUser;
-      } else {
-        uid = 'd_${DateTime.now().millisecondsSinceEpoch}';
-        name = 'Dr. ${_getNameFromEmail(email)}';
-        _user = UserModel(uid: uid, name: name, email: email, role: role);
-        _registeredUsers.add(_user!);
-      }
-    } else {
-      role = UserRole.patient;
-
-      if (existingUser.uid.isNotEmpty && existingUser.role == UserRole.patient) {
-        uid = existingUser.uid;
-        _user = existingUser;
-      } else {
-        uid = 'p_${DateTime.now().millisecondsSinceEpoch}';
-        name = _getNameFromEmail(email);
-        _user = UserModel(uid: uid, name: name, email: email, role: role);
-        _registeredUsers.add(_user!);
-        _patientReadings[uid] = [];
-      }
-    }
-
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> loginEnhanced(String email, String password) async {
-    return login(email, password);
-  }
-
-  Future<bool> loginAsDoctor(String email, String password) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final existingDoctor = _registeredUsers.firstWhere(
-          (user) => user.role == UserRole.doctor,
-      orElse: () => UserModel(uid: '', name: '', email: '', role: UserRole.patient),
-    );
-
-    if (existingDoctor.uid.isNotEmpty) {
-      _user = existingDoctor;
-    } else {
-      _user = UserModel(
-          uid: 'd1',
-          name: 'Dr. Test Doctor',
-          email: email,
-          role: UserRole.doctor
-      );
-      _registeredUsers.add(_user!);
-    }
-
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> signup(String name, String email, String password, UserRole role) async {
-    await Future.delayed(const Duration(milliseconds: 700));
-
-    final uid = role == UserRole.doctor ?
-    'd_${DateTime.now().millisecondsSinceEpoch}' :
-    'p_${DateTime.now().millisecondsSinceEpoch}';
-
-    final newUser = UserModel(uid: uid, name: name, email: email, role: role);
-    _registeredUsers.add(newUser);
-    _user = newUser;
-
-    if (role == UserRole.patient) {
-      _patientReadings[uid] = [];
-    }
-
-    notifyListeners();
-    return true;
-  }
-
-  void logout() {
-    _user = null;
-    notifyListeners();
-  }
-
-  List<Map<String, dynamic>> getAssignedPatients() {
-    final patientUsers = _registeredUsers.where((user) => user.role == UserRole.patient).toList();
-
-    return patientUsers.map((patient) {
-      final patientId = patient.uid;
-      final readings = _patientReadings[patientId] ?? [];
-      final lastReading = readings.isNotEmpty ? readings.last : null;
-      final age = patient.age ?? _calculateAgeFromEmail(patient.email);
-
-      String lastReadingText = 'No readings yet';
-      if (lastReading != null) {
-        lastReadingText = '${lastReading.heartRate} bpm • ${lastReading.bp} • SpO2: ${lastReading.spo2}%';
-      }
-
-      return {
-        'id': patientId,
-        'name': patient.name,
-        'email': patient.email,
+    try {
+      await _firestore.collection('users').doc(_user!.uid).update({
+        'name': name,
+        'phone': phone,
         'age': age,
-        'last': lastReading,
-        'lastReadingText': lastReadingText,
-        'readingsCount': readings.length,
-      };
-    }).toList();
+        'bloodGroup': bloodGroup,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('AuthProvider: Error updating profile: $e');
+    }
+
+    notifyListeners();
+  }
+
+  // ── Readings ──────────────────────────────────────────────────────────────
+  List<PatientReading> getMyReadings() {
+    if (_user == null) return [];
+    return _patientReadings[_user!.uid] ?? [];
   }
 
   List<PatientReading> readingsFor(String patientId) {
     return _patientReadings[patientId] ?? [];
   }
 
-  List<PatientReading> getMyReadings() {
-    if (_user == null) return [];
-
-    if (_user!.role == UserRole.doctor) {
-      return _patientReadings['p1'] ?? [];
-    } else {
-      return _patientReadings[_user!.uid] ?? [];
-    }
-  }
-
   void addReading(PatientReading reading) {
     if (_user == null || _user!.role != UserRole.patient) return;
 
-    final patientId = _user!.uid;
-    if (_patientReadings[patientId] == null) {
-      _patientReadings[patientId] = [];
-    }
+    final uid = _user!.uid;
+    _patientReadings[uid] ??= [];
+    _patientReadings[uid]!.insert(0, reading);
 
-    _patientReadings[patientId]!.insert(0, reading);
+    _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('readings')
+        .add({
+      'heartRate': reading.heartRate,
+      'bp': reading.bp,
+      'spo2': reading.spo2,
+      'timestamp': reading.timestamp.toIso8601String(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }).catchError((e) {
+      debugPrint('Error saving reading: $e');
+      return null;
+    });
+
     notifyListeners();
   }
 
+  Future<void> _loadReadingsFromFirestore(String uid) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('readings')
+          .orderBy('createdAt', descending: false)
+          .limit(50)
+          .get();
+
+      _patientReadings[uid] = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return PatientReading(
+          heartRate: data['heartRate'] as int? ?? 0,
+          bp: data['bp'] as String? ?? '--',
+          spo2: data['spo2'] as int? ?? 0,
+          timestamp:
+          DateTime.tryParse(data['timestamp'] as String? ?? '') ??
+              DateTime.now(),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('AuthProvider: Error loading readings: $e');
+      _patientReadings[uid] = [];
+    }
+  }
+
+  // ── Doctor helpers ────────────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getAssignedPatients() async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'patient')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': data['uid'] ?? doc.id,
+          'name': data['name'] ?? '',
+          'email': data['email'] ?? '',
+          'age': data['age'] ?? '--',
+          'bloodGroup': data['bloodGroup'] ?? '--',
+          'lastReadingText': 'No readings yet',
+          'readingsCount': 0,
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('AuthProvider: Error fetching patients: $e');
+      return [];
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
   String _getNameFromEmail(String email) {
     final namePart = email.split('@').first;
     return namePart.split('.').map((part) {
       if (part.isEmpty) return '';
       return part[0].toUpperCase() + part.substring(1);
     }).join(' ');
-  }
-
-  int _calculateAgeFromEmail(String email) {
-    final hash = email.hashCode.abs();
-    return 25 + (hash % 30);
-  }
-
-  void simulatePatientActivity() {
-    final patients = _registeredUsers.where((user) => user.role == UserRole.patient).toList();
-    for (final patient in patients) {
-      if (_patientReadings[patient.uid] == null) {
-        _patientReadings[patient.uid] = [];
-      }
-
-      final newReading = PatientReading(
-        timestamp: DateTime.now(),
-        heartRate: 60 + (patient.uid.hashCode % 40),
-        bp: '${110 + (patient.uid.hashCode % 20)}/${70 + (patient.uid.hashCode % 15)}',
-        spo2: 95 + (patient.uid.hashCode % 4),
-      );
-
-      _patientReadings[patient.uid]!.insert(0, newReading);
-    }
-    notifyListeners();
-  }
-}
-
-extension UserModelExtensions on UserModel {
-  Map<String, dynamic> toJson() {
-    return {
-      'uid': uid,
-      'name': name,
-      'email': email,
-      'role': role.toString(),
-    };
   }
 }

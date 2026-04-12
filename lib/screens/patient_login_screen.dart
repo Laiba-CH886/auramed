@@ -1,396 +1,413 @@
-// patient_login_screen.dart
-//
-// Updated PatientLoginScreen with:
-// - animated gradient background
-// - Hero animation on the logo (tag: 'app-hero-logo')
-// - glassmorphism form card
-// - subtle entrance (fade + slide) animation for form
-// - keeps your Provider auth logic and navigation
-//
-// Note: Make sure the RoleSelectionScreen (or whatever screen you navigate from)
-// uses the same Hero tag ('app-hero-logo') on the same logo widget so the
-// hero animation will run between screens.
-
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:auramed/providers/auth_provider.dart';
-import 'package:auramed/models/user.dart';
-import 'package:auramed/widgets/rounded_button.dart';
-import 'package:auramed/screens/patient_signup_screen.dart';
 import 'package:auramed/screens/patient_dashboard.dart';
 
 class PatientLoginScreen extends StatefulWidget {
-  static const routeName = "/patient_login_screen";
+  static const String routeName = '/patient-login';
   const PatientLoginScreen({super.key});
 
   @override
   State<PatientLoginScreen> createState() => _PatientLoginScreenState();
 }
 
-class _PatientLoginScreenState extends State<PatientLoginScreen>
-    with SingleTickerProviderStateMixin {
+class _PatientLoginScreenState extends State<PatientLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  String email = '';
-  String password = '';
-  bool loading = false;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-
-    // small delay so the background is visible then form comes in
-    Future.delayed(const Duration(milliseconds: 120), () {
-      if (mounted) _animController.forward();
-    });
-  }
+  bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _animController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => loading = true);
+  // ── Email Login ───────────────────────────────────────────────────────────
+  Future<void> _loginWithEmail() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isLoading = true);
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final ok = await auth.login(email.trim(), password);
+    try {
+      // ✅ Use AuthProvider.login — syncs Firebase + Firestore user into provider
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final result = await auth.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
 
-    setState(() => loading = false);
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (ok && auth.user!.role == UserRole.patient) {
-      Navigator.pushReplacementNamed(context, PatientDashboard.routeName);
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Invalid patient login")));
+      if (result['success'] == true) {
+        final role = result['role'] as String? ?? '';
+        if (role == 'patient') {
+          Navigator.pushReplacementNamed(context, PatientDashboard.routeName);
+        } else {
+          // Doctor trying to login as patient
+          await auth.logout();
+          _showError(
+              'This account is registered as a doctor. Please use the Doctor login.');
+        }
+      } else {
+        _showError(result['message'] as String? ?? 'Login failed. Please try again.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('An unexpected error occurred: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // ── Google Login ──────────────────────────────────────────────────────────
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      // ✅ Use AuthProvider.signInWithGoogle — syncs user into provider
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final result = await auth.signInWithGoogle(role: 'patient');
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final role = result['role'] as String? ?? '';
+        if (role == 'patient') {
+          Navigator.pushReplacementNamed(context, PatientDashboard.routeName);
+        } else {
+          await auth.logout();
+          _showError('This Google account is registered as a doctor. Please use Doctor login.');
+        }
+      } else {
+        final message = result['message'] as String? ?? 'Google sign-in failed.';
+        if (message != 'Sign in canceled') _showError(message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Google sign-in failed: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
+  // ── Forgot Password ───────────────────────────────────────────────────────
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showError('Please enter your email address first.');
+      return;
+    }
+
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      // AuthProvider exposes firebaseUser — use AuthService directly via provider
+      await auth.sendPasswordReset(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Password reset email sent! Check your inbox.'),
+        backgroundColor: Colors.green,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Failed to send reset email. Please check the email address.');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red,
+      duration: const Duration(seconds: 4),
+    ));
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final theme = Theme.of(context);
-
     return Scaffold(
-      // keep AppBar hidden for a clean login look
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // animated subtle gradient background
-          const AnimatedGradientBackground(),
+      backgroundColor: const Color(0xFFF0F4FF),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 16),
+              Image.asset(
+                'assets/images/logo.png',
+                height: 60,
+                errorBuilder: (_, __, ___) =>
+                const Icon(Icons.local_hospital, size: 60, color: Colors.teal),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'AuraMed - Patient',
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal),
+              ),
+              const Text(
+                'Login to continue',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
 
-          // decorative blurred circles for glassmorphism vibe
-          Positioned(
-            top: -mq.size.width * 0.3,
-            right: -mq.size.width * 0.22,
-            child: _DecorBlur(size: mq.size.width * 0.55),
-          ),
-          Positioned(
-            bottom: -mq.size.width * 0.28,
-            left: -mq.size.width * 0.28,
-            child: _DecorBlur(
-              size: mq.size.width * 0.72,
-              color: Colors.tealAccent.withValues(alpha: 0.08),
-            ),
-          ),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Welcome Back 👤',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 20),
 
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // small top spacing
-                  const SizedBox(height: 6),
-
-                  // HERO Logo (this must match the role selection's hero tag)
-                  Hero(
-                    tag: 'app-hero-logo',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Container(
-                        color: Colors.white,
-                        padding: const EdgeInsets.all(6),
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          width: 92,
-                          height: 92,
-                          fit: BoxFit.contain,
+              // ── Form Card ───────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // Google Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: _isGoogleLoading ? null : _loginWithGoogle,
+                        icon: _isGoogleLoading
+                            ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                            : SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CustomPaint(painter: _GoogleLogoPainter()),
+                        ),
+                        label: const Text(
+                          'Continue with Google',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w500),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          side: BorderSide(color: Colors.grey.shade300),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('OR',
+                            style: TextStyle(
+                                color: Colors.grey, fontSize: 12)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ]),
+                    const SizedBox(height: 16),
 
-                  Text(
-                    'AuraMed - Patient',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.teal.shade700,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Text(
-                    'Login to continue',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Welcome text
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Welcome Patient 👤",
-                      style: theme.textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // Animated card (glassmorphism) containing the form
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: _GlassFormCard(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            children: [
-                              // Email
-                              TextFormField(
-                                decoration: InputDecoration(
-                                  labelText: "Email",
-                                  prefixIcon: const Icon(Icons.email_outlined),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.6),
-                                ),
-                                validator: (v) => v != null && v.contains('@')
-                                    ? null
-                                    : "Enter valid email",
-                                onChanged: (v) => email = v,
-                                keyboardType: TextInputType.emailAddress,
-                              ),
-
-                              const SizedBox(height: 14),
-
-                              // Password
-                              TextFormField(
-                                decoration: InputDecoration(
-                                  labelText: "Password",
-                                  prefixIcon: const Icon(Icons.lock_outline),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.6),
-                                ),
-                                obscureText: true,
-                                validator: (v) => v != null && v.length >= 6
-                                    ? null
-                                    : "Minimum 6 characters",
-                                onChanged: (v) => password = v,
-                              ),
-
-                              const SizedBox(height: 18),
-
-                              // login button or loader
-                              SizedBox(
-                                width: double.infinity,
-                                child: loading
-                                    ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                                    : RoundedButton(
-                                  text: "Login",
-                                  onTap: _submit,
-                                ),
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text("Don't have an account?"),
-                                  TextButton(
-                                    onPressed: () => Navigator.pushNamed(context, PatientSignupScreen.routeName),
-                                    child: const Text(
-                                      "Sign up",
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                    // Email/Password Form
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          // Email
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty)
+                                return 'Email is required';
+                              if (!v.contains('@'))
+                                return 'Enter a valid email';
+                              return null;
+                            },
+                            decoration:
+                            _inputDecoration('Email', Icons.email_outlined),
                           ),
-                        ),
+                          const SizedBox(height: 14),
+
+                          // Password
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            validator: (v) {
+                              if (v == null || v.isEmpty)
+                                return 'Password is required';
+                              if (v.length < 6)
+                                return 'Password must be at least 6 characters';
+                              return null;
+                            },
+                            decoration: _inputDecoration(
+                                'Password', Icons.lock_outline)
+                                .copyWith(
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () => setState(() =>
+                                _obscurePassword = !_obscurePassword),
+                              ),
+                            ),
+                          ),
+
+                          // Forgot Password
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _forgotPassword,
+                              child: const Text('Forgot Password?',
+                                  style:
+                                  TextStyle(color: Colors.deepPurple)),
+                            ),
+                          ),
+
+                          // Login Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _loginWithEmail,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white),
+                              )
+                                  : const Text(
+                                'LOGIN',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
 
-                  const SizedBox(height: 12),
-
-                  // small secondary actions / help
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Having trouble signing in? Contact support@auramed.example',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Don't have an account? "),
+                  GestureDetector(
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/patient-signup'),
+                    child: const Text(
+                      'Sign up',
+                      style: TextStyle(
+                          color: Colors.deepPurple,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Animated subtle gradient background widget
-class AnimatedGradientBackground extends StatefulWidget {
-  const AnimatedGradientBackground({super.key});
-
-  @override
-  State<AnimatedGradientBackground> createState() =>
-      _AnimatedGradientBackgroundState();
-}
-
-class _AnimatedGradientBackgroundState
-    extends State<AnimatedGradientBackground> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Alignment> _alignAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-    AnimationController(vsync: this, duration: const Duration(seconds: 8))
-      ..repeat(reverse: true);
-    _alignAnim = AlignmentTween(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _alignAnim,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: _alignAnim.value,
-              end: Alignment.center,
-              colors: [
-                const Color(0xFFFFFFFF),
-                Colors.teal.shade50.withValues(alpha: 0.9),
-                const Color(0xFFF7FBFF),
-              ],
-              stops: const [0.0, 0.6, 1.0],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// subtle decorative blurred circle
-class _DecorBlur extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _DecorBlur({required this.size, this.color = const Color(0xFF66C2FF)});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration:
-      BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: const SizedBox(),
-      ),
-    );
-  }
-}
-
-/// Glassmorphism card used to hold the form
-class _GlassFormCard extends StatelessWidget {
-  final Widget child;
-  const _GlassFormCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12.withValues(alpha: 0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: child,
+            ],
           ),
         ),
       ),
     );
   }
+
+  InputDecoration _inputDecoration(String hint, IconData icon) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: Colors.deepPurple),
+      hintText: hint,
+      labelText: hint,
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      contentPadding:
+      const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ── Google Logo Painter ───────────────────────────────────────────────────────
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85);
+    const sw = 6.5;
+
+    void arc(double start, double sweep, Color color) {
+      canvas.drawArc(
+          rect,
+          start,
+          sweep,
+          false,
+          Paint()
+            ..color = color
+            ..strokeWidth = sw
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.butt);
+    }
+
+    arc(-0.26, 1.65, const Color(0xFF4285F4));
+    arc(1.39, 0.78, const Color(0xFF34A853));
+    arc(2.17, 0.65, const Color(0xFFFBBC05));
+    arc(2.82, 1.10, const Color(0xFFEA4335));
+
+    canvas.drawLine(
+      Offset(cx - 0.02, cy + r * 0.01),
+      Offset(cx + r * 0.82, cy + r * 0.01),
+      Paint()
+        ..color = const Color(0xFF4285F4)
+        ..strokeWidth = sw
+        ..strokeCap = StrokeCap.square,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }

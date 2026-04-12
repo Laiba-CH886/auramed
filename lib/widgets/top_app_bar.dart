@@ -18,7 +18,7 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
         if (showProfile)
           IconButton(
             onPressed: onProfileTap,
-            icon: const CircleAvatar(child: Icon(Icons.person, size: 18, color: Colors.white), backgroundColor: Color(0xFF9A6BFF)),
+            icon: const CircleAvatar(backgroundColor: Color(0xFF9A6BFF), child: Icon(Icons.person, size: 18, color: Colors.white)),
           )
       ],
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 // Theme
@@ -58,12 +59,25 @@ import 'package:auramed/screens/consultation/doctor_notes_screen.dart';
 import 'package:auramed/screens/readings/add_manual_reading_screen.dart';
 import 'package:auramed/screens/readings/reading_detail_screen.dart';
 import 'package:auramed/screens/readings/readings_history_screen.dart';
+import 'package:auramed/screens/connect_device_screen.dart';
+
 
 
 // ==============================
 // MAIN FUNCTION
 // ==============================
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Initialize Firebase
+    await Firebase.initializeApp();
+    debugPrint('✅ Firebase initialized successfully!');
+  } catch (e) {
+    debugPrint('❌ Firebase initialization error: $e');
+  }
+
   runApp(const AuraMedApp());
 }
 
@@ -187,6 +201,7 @@ class AuraMedApp extends StatelessWidget {
               const AboutAuraMedScreen(),
               HealthTipsScreen.routeName: (_) =>
               const HealthTipsScreen(),
+              '/connect-device': (context) => const ConnectDeviceScreen(),
             },
           );
         },

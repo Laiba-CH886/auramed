@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:auramed/providers/appointment_provider.dart';
 import 'package:auramed/providers/auth_provider.dart';
 import 'package:auramed/models/appointment.dart';
+import 'package:auramed/models/user.dart';
 import 'package:auramed/screens/patient_detail_screen.dart';
 
 class DoctorAppointmentActionScreen extends StatefulWidget {
@@ -31,7 +32,11 @@ class _DoctorAppointmentActionScreenState extends State<DoctorAppointmentActionS
     final appt = appointmentProv.getAppointmentById(appointmentId);
     if (appt == null) return const Scaffold(body: Center(child: Text("Error: Appointment not found")));
 
-    final patient = auth.registeredUsers.firstWhere((u) => u.uid == appt.patientId);
+    final patient = auth.registeredUsers.firstWhere(
+      (u) => u.uid == appt.patientId,
+      orElse: () => UserModel(uid: appt.patientId, name: 'Patient', email: '', role: UserRole.patient),
+    );
+    
     final readings = auth.readingsFor(appt.patientId);
     final lastReading = readings.isNotEmpty ? readings.last : null;
 
@@ -161,7 +166,7 @@ class _DoctorAppointmentActionScreenState extends State<DoctorAppointmentActionS
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8)]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]),
       child: child,
     );
   }
