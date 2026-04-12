@@ -7,12 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1015238997479:android:3ecd705a07e7ce40bb3942",
+        "mobilesdk_app_id": "1:1015238997479:android:8c5e10eb24160a09bb3942",
         "android_client_info": {
-          "package_name": "com.example.auramed"
+          "package_name": "com.auramed.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1015238997479-vatvp205qqpued78geta1jnt3cpjlvh2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.auramed.app",
+            "certificate_hash": "3ab9d63c059298c5eb8894946be017d3d1a14fd9"
+          }
+        },
+        {
+          "client_id": "1015238997479-hlqnp6fa3emob3armi4t8q8656c6c27p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBooPi_Q_UrsvcC8NwmRANeb29_ZYerUIw"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1015238997479-hlqnp6fa3emob3armi4t8q8656c6c27p.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
