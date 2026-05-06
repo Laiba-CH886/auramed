@@ -9,6 +9,9 @@ import 'package:auramed/theme.dart';
 import 'package:auramed/providers/auth_provider.dart';
 import 'package:auramed/providers/appointment_provider.dart';
 
+// Services
+import 'package:auramed/services/fcm_service.dart';
+
 // Splash & Role
 import 'package:auramed/screens/splash_screen.dart';
 import 'package:auramed/screens/role_selection_screen.dart';
@@ -23,6 +26,11 @@ import 'package:auramed/screens/doctor_login_screen.dart';
 import 'package:auramed/screens/doctor_signup_screen.dart';
 import 'package:auramed/screens/doctor_dashboard.dart';
 
+// 🟣 ADMIN SCREENS (NEW)
+import 'package:auramed/screens/admin_login_screen.dart';
+import 'package:auramed/screens/admin_dashboard_screen.dart';
+import 'package:auramed/screens/pending_doctors_screen.dart';
+
 // Common Screens
 import 'package:auramed/screens/patient_detail_screen.dart';
 import 'package:auramed/screens/profile_screen.dart';
@@ -30,61 +38,48 @@ import 'package:auramed/screens/edit_profile_screen.dart';
 
 // Settings / Info Screens
 import 'package:auramed/screens/app_setting_screen.dart';
-import 'package:auramed/screens/privacy_and_security_screen.dart';
 import 'package:auramed/screens/notifications_screen.dart';
-import 'package:auramed/screens/Appearance_screen.dart';
-import 'package:auramed/screens/Help_and_FAQ_Screen.dart';
+import 'package:auramed/screens/appearance_screen.dart';
+import 'package:auramed/screens/help_and_faq_screen.dart';
 import 'package:auramed/screens/contact_support_screen.dart';
-import 'package:auramed/screens/about_AuraMed_screen.dart';
+import 'package:auramed/screens/about_auramed_screen.dart';
 import 'package:auramed/screens/health_tips_screen.dart';
 
-// --------------------------
 // Appointment Screens
-// --------------------------
 import 'package:auramed/screens/appointments/appointments_list_screen.dart';
 import 'package:auramed/screens/appointments/appointment_detail_screen.dart';
 import 'package:auramed/screens/appointments/book_appointment_screen.dart';
 import 'package:auramed/screens/appointments/doctor_appointment_action_screen.dart';
 
-// --------------------------
 // Consultation Screens
-// --------------------------
 import 'package:auramed/screens/consultation/consultation_list_screen.dart';
 import 'package:auramed/screens/consultation/consultation_chat_screen.dart';
 import 'package:auramed/screens/consultation/doctor_notes_screen.dart';
 
-// --------------------------
 // Readings Screens
-// --------------------------
 import 'package:auramed/screens/readings/add_manual_reading_screen.dart';
 import 'package:auramed/screens/readings/reading_detail_screen.dart';
 import 'package:auramed/screens/readings/readings_history_screen.dart';
 import 'package:auramed/screens/connect_device_screen.dart';
 
+final GlobalKey<NavigatorState> appNavigatorKey =
+GlobalKey<NavigatorState>();
 
-
-// ==============================
-// MAIN FUNCTION
-// ==============================
 void main() async {
-  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Initialize Firebase
     await Firebase.initializeApp();
     debugPrint('✅ Firebase initialized successfully!');
   } catch (e) {
     debugPrint('❌ Firebase initialization error: $e');
   }
 
+  await FcmService.instance.initialize();
+
   runApp(const AuraMedApp());
 }
 
-
-// ==============================
-// MAIN APP
-// ==============================
 class AuraMedApp extends StatelessWidget {
   const AuraMedApp({super.key});
 
@@ -102,27 +97,26 @@ class AuraMedApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
+            navigatorKey: appNavigatorKey,
             title: 'AuraMed',
             debugShowCheckedModeBanner: false,
-            theme: buildAuraTheme(),
+
+            // THEMES
+            theme: buildAuraLightTheme(),
+            darkTheme: buildAuraDarkTheme(),
+            themeMode: auth.currentThemeMode,
+
+            // START SCREEN
             initialRoute: SplashScreen.routeName,
 
-            // ==========================
-            //         ALL ROUTES
-            // ==========================
+            // ROUTES
             routes: {
-
-              // --------------------------
-              // Splash & Role
-              // --------------------------
-              SplashScreen.routeName: (_) =>
-              const SplashScreen(),
+              // 🔵 CORE
+              SplashScreen.routeName: (_) => const SplashScreen(),
               RoleSelectionScreen.routeName: (_) =>
               const RoleSelectionScreen(),
 
-              // --------------------------
-              // Patient Authentication
-              // --------------------------
+              // 🟢 PATIENT
               PatientLoginScreen.routeName: (_) =>
               const PatientLoginScreen(),
               PatientSignupScreen.routeName: (_) =>
@@ -130,9 +124,7 @@ class AuraMedApp extends StatelessWidget {
               PatientDashboard.routeName: (_) =>
               const PatientDashboard(),
 
-              // --------------------------
-              // Doctor Authentication
-              // --------------------------
+              // 🟢 DOCTOR
               DoctorLoginScreen.routeName: (_) =>
               const DoctorLoginScreen(),
               DoctorSignupScreen.routeName: (_) =>
@@ -140,9 +132,15 @@ class AuraMedApp extends StatelessWidget {
               DoctorDashboard.routeName: (_) =>
               const DoctorDashboard(),
 
-              // --------------------------
-              // Common Screens
-              // --------------------------
+              // 🟣 ADMIN (NEW)
+              AdminLoginScreen.routeName: (_) =>
+              const AdminLoginScreen(),
+              AdminDashboardScreen.routeName: (_) =>
+              const AdminDashboardScreen(),
+              PendingDoctorsScreen.routeName: (_) =>
+              const PendingDoctorsScreen(),
+
+              // 🟡 COMMON
               PatientDetailScreen.routeName: (_) =>
               const PatientDetailScreen(),
               ProfileScreen.routeName: (_) =>
@@ -150,9 +148,7 @@ class AuraMedApp extends StatelessWidget {
               EditProfileScreen.routeName: (_) =>
               const EditProfileScreen(),
 
-              // --------------------------
-              // Appointment Screens
-              // --------------------------
+              // 📅 APPOINTMENTS
               AppointmentsListScreen.routeName: (_) =>
               const AppointmentsListScreen(),
               AppointmentDetailScreen.routeName: (_) =>
@@ -162,9 +158,7 @@ class AuraMedApp extends StatelessWidget {
               DoctorAppointmentActionScreen.routeName: (_) =>
               const DoctorAppointmentActionScreen(),
 
-              // --------------------------
-              // Consultation Screens
-              // --------------------------
+              // 💬 CONSULTATION
               ConsultationListScreen.routeName: (_) =>
               const ConsultationListScreen(),
               ConsultationChatScreen.routeName: (_) =>
@@ -172,9 +166,7 @@ class AuraMedApp extends StatelessWidget {
               DoctorNotesScreen.routeName: (_) =>
               const DoctorNotesScreen(),
 
-              // --------------------------
-              // Readings Screens
-              // --------------------------
+              // 📊 READINGS
               AddManualReadingScreen.routeName: (_) =>
               const AddManualReadingScreen(),
               ReadingDetailScreen.routeName: (_) =>
@@ -182,13 +174,9 @@ class AuraMedApp extends StatelessWidget {
               ReadingsHistoryScreen.routeName: (_) =>
               const ReadingsHistoryScreen(),
 
-              // --------------------------
-              // Settings / Support / Info
-              // --------------------------
+              // ⚙️ SETTINGS
               AppSettingsScreen.routeName: (_) =>
               const AppSettingsScreen(),
-              PrivacySecurityScreen.routeName: (_) =>
-              const PrivacySecurityScreen(),
               NotificationsScreen.routeName: (_) =>
               const NotificationsScreen(),
               AppearanceScreen.routeName: (_) =>
@@ -201,7 +189,10 @@ class AuraMedApp extends StatelessWidget {
               const AboutAuraMedScreen(),
               HealthTipsScreen.routeName: (_) =>
               const HealthTipsScreen(),
-              '/connect-device': (context) => const ConnectDeviceScreen(),
+
+              // 🔌 DEVICE
+              ConnectDeviceScreen.routeName: (_) =>
+              const ConnectDeviceScreen(),
             },
           );
         },

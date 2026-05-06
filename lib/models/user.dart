@@ -10,6 +10,10 @@ class UserModel {
   final String? bloodGroup;
   final String? photoUrl;
 
+  // ✅ NEW FIELDS
+  final bool isApproved;
+  final bool isBlocked;
+
   const UserModel({
     required this.uid,
     required this.name,
@@ -19,8 +23,11 @@ class UserModel {
     this.age,
     this.bloodGroup,
     this.photoUrl,
+    required this.isApproved,
+    required this.isBlocked,
   });
 
+  // ───────────────── COPY WITH ─────────────────
   UserModel copyWith({
     String? uid,
     String? name,
@@ -30,6 +37,8 @@ class UserModel {
     int? age,
     String? bloodGroup,
     String? photoUrl,
+    bool? isApproved,
+    bool? isBlocked,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -40,29 +49,68 @@ class UserModel {
       age: age ?? this.age,
       bloodGroup: bloodGroup ?? this.bloodGroup,
       photoUrl: photoUrl ?? this.photoUrl,
+      isApproved: isApproved ?? this.isApproved,
+      isBlocked: isBlocked ?? this.isBlocked,
     );
   }
 
+  // ───────────────── FIRESTORE → APP ─────────────────
   factory UserModel.fromFirestore(Map<String, dynamic> data, String uid) {
-    final roleStr = data['role'] as String? ?? 'patient';
+    final roleStr = (data['role'] as String? ?? 'patient').toLowerCase();
+
+    UserRole role;
+    switch (roleStr) {
+      case 'doctor':
+        role = UserRole.doctor;
+        break;
+      case 'admin':
+        role = UserRole.admin;
+        break;
+      default:
+        role = UserRole.patient;
+    }
+
     return UserModel(
       uid: uid,
       name: data['name'] as String? ?? '',
       email: data['email'] as String? ?? '',
-      role: roleStr == 'doctor' ? UserRole.doctor : UserRole.patient,
+      role: role,
       phone: data['phone'] as String?,
       age: data['age'] as int?,
       bloodGroup: data['bloodGroup'] as String?,
       photoUrl: data['photoUrl'] as String?,
+
+      // ✅ IMPORTANT DEFAULT LOGIC
+      isApproved: data['isApproved'] as bool? ?? (role != UserRole.doctor),
+      isBlocked: data['isBlocked'] as bool? ?? false,
     );
   }
 
+  // ───────────────── APP → FIRESTORE ─────────────────
   Map<String, dynamic> toFirestore() {
+    String roleStr;
+
+    switch (role) {
+      case UserRole.doctor:
+        roleStr = 'doctor';
+        break;
+      case UserRole.admin:
+        roleStr = 'admin';
+        break;
+      default:
+        roleStr = 'patient';
+    }
+
     return {
       'uid': uid,
       'name': name,
       'email': email,
-      'role': role == UserRole.doctor ? 'doctor' : 'patient',
+      'role': roleStr,
+
+      // ✅ NEW FIELDS
+      'isApproved': isApproved,
+      'isBlocked': isBlocked,
+
       if (phone != null) 'phone': phone,
       if (age != null) 'age': age,
       if (bloodGroup != null) 'bloodGroup': bloodGroup,

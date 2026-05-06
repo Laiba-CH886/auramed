@@ -78,7 +78,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
             left: -mq.size.width * 0.25,
             child: _BlurCircle(
               size: mq.size.width * 0.7,
-              color: Colors.greenAccent.withValues(alpha: 0.08),
+              color: Colors.greenAccent.withOpacity(0.08),
             ),
           ),
 
@@ -136,7 +136,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF163a5f).withValues(alpha: 0.95),
+                            color: const Color(0xFF163a5f).withOpacity(0.95),
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -228,7 +228,7 @@ class _BlurCircle extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
+        color: color.withOpacity(0.18),
         borderRadius: BorderRadius.circular(size),
       ),
       child: BackdropFilter(
@@ -287,12 +287,12 @@ class _RoleCardState extends State<RoleCard> {
           ]
               : [
             BoxShadow(
-              color: Colors.black12.withValues(alpha: 0.06),
+              color: Colors.black12.withOpacity(0.06),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),
             BoxShadow(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: Colors.white.withOpacity(0.9),
               blurRadius: 0.5,
               offset: const Offset(-6, -6),
               spreadRadius: -10,

@@ -24,6 +24,7 @@ dependencies:
   firebase_auth: ^5.3.0
   cloud_firestore: ^5.4.0
   google_sign_in: ^6.2.2
+  firebase_messaging: ^15.1.3
 
   # ✅ Health Connect — reads data from Samsung Health / Galaxy Fit 3
   health: ^11.0.0

@@ -7,6 +7,7 @@ import 'package:auramed/screens/consultation/consultation_chat_screen.dart';
 
 class ConsultationListScreen extends StatelessWidget {
   static const routeName = '/consultation';
+
   const ConsultationListScreen({super.key});
 
   @override
@@ -25,12 +26,8 @@ class ConsultationListScreen extends StatelessWidget {
     final String filterValue = currentUser.uid;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FF),
       appBar: AppBar(
         title: const Text("Consultations"),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -63,15 +60,18 @@ class ConsultationListScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_bubble_outline,
-                      size: 64, color: Colors.grey.shade300),
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 64,
+                    color: Theme.of(context).hintColor.withOpacity(0.4),
+                  ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'No consultations yet',
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.w500),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).hintColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Padding(
@@ -81,8 +81,9 @@ class ConsultationListScreen extends StatelessWidget {
                           ? 'Patients will appear here when they start a consultation.'
                           : 'Book an appointment to start a consultation.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 13, color: Colors.grey),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).hintColor,
+                      ),
                     ),
                   ),
                 ],
@@ -91,47 +92,61 @@ class ConsultationListScreen extends StatelessWidget {
           }
 
           final active = docs
-              .where((d) =>
-          (d.data() as Map<String, dynamic>)['status'] == 'active')
+              .where(
+                (d) =>
+            (d.data() as Map<String, dynamic>)['status'] == 'active',
+          )
               .toList();
+
           final completed = docs
-              .where((d) =>
-          (d.data() as Map<String, dynamic>)['status'] ==
-              'completed')
+              .where(
+                (d) =>
+            (d.data() as Map<String, dynamic>)['status'] == 'completed',
+          )
               .toList();
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildSectionHeader("💬 Active Consultations"),
+              _buildSectionHeader(context, "💬 Active Consultations"),
               if (active.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, bottom: 16),
-                  child: Text("No active consultations",
-                      style: TextStyle(color: Colors.grey)),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 16),
+                  child: Text(
+                    "No active consultations",
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
                 )
               else
-                ...active.map((doc) => _buildCard(
-                  context,
-                  doc,
-                  isActive: true,
-                  isDoctor: isDoctor,
-                )),
+                ...active.map(
+                      (doc) => _buildCard(
+                    context,
+                    doc,
+                    isActive: true,
+                    isDoctor: isDoctor,
+                    currentUserId: currentUser.uid,
+                  ),
+                ),
               const SizedBox(height: 24),
-              _buildSectionHeader("✅ Completed Consultations"),
+              _buildSectionHeader(context, "✅ Completed Consultations"),
               if (completed.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, bottom: 16),
-                  child: Text("No completed consultations",
-                      style: TextStyle(color: Colors.grey)),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 16),
+                  child: Text(
+                    "No completed consultations",
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
                 )
               else
-                ...completed.map((doc) => _buildCard(
-                  context,
-                  doc,
-                  isActive: false,
-                  isDoctor: isDoctor,
-                )),
+                ...completed.map(
+                      (doc) => _buildCard(
+                    context,
+                    doc,
+                    isActive: false,
+                    isDoctor: isDoctor,
+                    currentUserId: currentUser.uid,
+                  ),
+                ),
             ],
           );
         },
@@ -139,15 +154,14 @@ class ConsultationListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Colors.black87),
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -157,56 +171,113 @@ class ConsultationListScreen extends StatelessWidget {
       QueryDocumentSnapshot doc, {
         required bool isActive,
         required bool isDoctor,
+        required String currentUserId,
       }) {
     final data = doc.data() as Map<String, dynamic>;
 
-    // Doctors see patient name, patients see doctor name
     final displayName = isDoctor
         ? (data['patientName'] as String? ?? 'Patient')
         : (data['doctorName'] as String? ?? 'Doctor');
 
     final lastMsg = data['lastMessage'] as String? ?? 'No messages yet';
     final createdAt = data['createdAt'] as Timestamp?;
-    final timeStr =
-    createdAt != null ? _formatTimestamp(createdAt.toDate()) : '';
+    final timeStr = createdAt != null ? _formatTimestamp(createdAt.toDate()) : '';
+
+    final latestVitals = data['latestVitals'] as Map<String, dynamic>?;
+    final hasEmergency = data['hasEmergency'] as bool? ?? false;
+    final isUnread = isDoctor
+        ? !(data['isReadByDoctor'] as bool? ?? true)
+        : !(data['isReadByPatient'] as bool? ?? true);
 
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      shape:
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
         contentPadding:
         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: isActive
-              ? const Color(0xFF6C73FF).withValues(alpha: 0.12)
-              : Colors.grey.withValues(alpha: 0.12),
-          child: Text(
-            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-            style: TextStyle(
-              color: isActive ? const Color(0xFF6C73FF) : Colors.grey,
-              fontWeight: FontWeight.bold,
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CircleAvatar(
+              backgroundColor: isActive
+                  ? const Color(0xFF6C73FF).withOpacity(0.12)
+                  : Colors.grey.withOpacity(0.12),
+              child: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: isActive ? const Color(0xFF6C73FF) : Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
+            if (hasEmergency)
+              const Positioned(
+                top: -2,
+                right: -2,
+                child: CircleAvatar(
+                  radius: 7,
+                  backgroundColor: Colors.redAccent,
+                  child: Icon(
+                    Icons.priority_high,
+                    size: 10,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
         ),
-        title: Text(displayName,
-            style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                displayName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (isUnread)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(lastMsg,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              lastMsg,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (latestVitals != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'HR ${latestVitals['heartRate'] ?? '--'} • BP ${latestVitals['bp'] ?? '--'} • SpO₂ ${latestVitals['spo2'] ?? '--'}%',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: hasEmergency ? Colors.redAccent : Theme.of(context).hintColor,
+                  fontWeight: hasEmergency ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
-            Text(timeStr,
-                style:
-                const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              timeStr,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
+            ),
           ],
         ),
-        trailing: isActive
+        trailing: hasEmergency
+            ? const Icon(Icons.warning_amber_rounded, color: Colors.redAccent)
+            : isActive
             ? const Icon(Icons.chevron_right, color: Color(0xFF6C73FF))
-            : const Icon(Icons.check_circle,
-            color: Colors.green, size: 20),
+            : const Icon(Icons.check_circle, color: Colors.green, size: 20),
         onTap: () {
           Navigator.pushNamed(
             context,

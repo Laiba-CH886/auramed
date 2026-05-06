@@ -20,8 +20,18 @@ class PatientDetailScreen extends StatelessWidget {
     final appointmentProv = Provider.of<AppointmentProvider>(context);
     
     final patient = auth.registeredUsers.firstWhere(
-      (u) => u.uid == patientId, 
-      orElse: () => UserModel(uid: 'p1', name: 'John Doe', email: 'john@test.com', role: UserRole.patient, age: 25, bloodGroup: 'A+', phone: '+923001234567')
+      (u) => u.uid == patientId,
+      orElse: () => UserModel(
+        uid: 'p1',
+        name: 'John Doe',
+        email: 'john@test.com',
+        role: UserRole.patient,
+        age: 25,
+        bloodGroup: 'A+',
+        phone: '+923001234567',
+        isApproved: true,
+        isBlocked: false,
+      )
     );
     
     final readings = auth.readingsFor(patientId);

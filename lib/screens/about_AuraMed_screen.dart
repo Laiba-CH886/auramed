@@ -2,67 +2,115 @@ import 'package:flutter/material.dart';
 
 class AboutAuraMedScreen extends StatelessWidget {
   static const routeName = '/about';
+
   const AboutAuraMedScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FF),
       appBar: AppBar(
         title: const Text("About AuraMed"),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
             const SizedBox(height: 20),
+
+            /// LOGO CARD
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 15)]),
-              child: Image.asset('assets/images/logo.png', height: 100),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 15,
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 100,
+              ),
             ),
+
             const SizedBox(height: 24),
-            const Text("AuraMed", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF8E9EFF))),
-            const Text("Your Smart Health Companion", style: TextStyle(fontSize: 14, color: Colors.grey)),
+
+            /// APP NAME
+            Text(
+              "AuraMed",
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.primary,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Text(
+              "Your Smart Health Companion",
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+
             const SizedBox(height: 12),
-            const Text("Version 1.0.0", style: TextStyle(fontWeight: FontWeight.w500)),
+
+            Text(
+              "Version 1.0.0",
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+
             const Divider(height: 48),
-            
-            _buildAboutSection("Our Mission", "AuraMed is designed to bridge the gap between patients and healthcare providers. We leverage smart technology to provide real-time health monitoring and seamless communication."),
-            const SizedBox(height: 24),
-            
-            _buildLinkTile(Icons.description_outlined, "Terms of Service"),
-            _buildLinkTile(Icons.privacy_tip_outlined, "Privacy Policy"),
-            _buildLinkTile(Icons.code, "Open Source Licenses"),
-            
+
+            /// ABOUT SECTION
+            _buildAboutSection(
+              context,
+              "Our Mission",
+              "AuraMed is designed to bridge the gap between patients and healthcare providers. "
+                  "We leverage smart technology to provide real-time health monitoring and seamless communication.",
+            ),
+
             const SizedBox(height: 40),
-            const Text("© 2026 AuraMed Inc. All rights reserved.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+
+            /// FOOTER
+            Text(
+              "© 2026 AuraMed Inc. All rights reserved.",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAboutSection(String title, String content) {
+  Widget _buildAboutSection(
+      BuildContext context, String title, String content) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(content, style: TextStyle(color: Colors.grey.shade800, height: 1.5, fontSize: 15)),
+        Text(
+          content,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            height: 1.5,
+          ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildLinkTile(IconData icon, String title) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFF8E9EFF)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
-      onTap: () {},
     );
   }
 }

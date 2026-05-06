@@ -1,60 +1,125 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:auramed/providers/auth_provider.dart';
 import 'package:auramed/models/reading.dart';
 import 'package:auramed/screens/readings/add_manual_reading_screen.dart';
 import 'package:auramed/screens/readings/reading_detail_screen.dart';
 
 class ReadingsHistoryScreen extends StatelessWidget {
   static const routeName = '/readings-history';
+
   const ReadingsHistoryScreen({super.key});
+
+  String _formatSleep(int? sleepMinutes) {
+    if (sleepMinutes == null || sleepMinutes <= 0) return '--';
+    final hours = sleepMinutes ~/ 60;
+    final minutes = sleepMinutes % 60;
+    return '${hours}h ${minutes}m';
+  }
+
+  String _formatWater(double? liters) {
+    if (liters == null || liters <= 0) return '--';
+    return '${liters.toStringAsFixed(1)} L';
+  }
+
+  String _formatStress(int? stressLevel) {
+    if (stressLevel == null || stressLevel <= 0) return '--';
+    return '$stressLevel%';
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Dummy data for now (smartwatch simulated)
-    final readings = [
-      Reading(type: 'Heart Rate', value: '78 bpm', date: DateTime.now().subtract(const Duration(hours: 2)), notes: 'Feeling calm'),
-      Reading(type: 'Blood Pressure', value: '120/80', date: DateTime.now().subtract(const Duration(days: 1)), notes: 'Routine check'),
-      Reading(type: 'Oxygen Level', value: '98%', date: DateTime.now().subtract(const Duration(days: 2)), notes: 'After morning walk'),
-      Reading(type: 'Sugar Level', value: '95 mg/dL', date: DateTime.now().subtract(const Duration(days: 3)), notes: 'Fasting'),
-    ];
+    final auth = Provider.of<AuthProvider>(context);
+    final readings = auth.getMyReadings();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FF),
       appBar: AppBar(
         title: const Text('My Health History'),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
       ),
-      body: ListView.builder(
+      body: readings.isEmpty
+          ? _buildEmptyState(context)
+          : ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: readings.length,
         itemBuilder: (context, index) {
-          final r = readings[index];
+          final r = readings[readings.length - 1 - index];
+
+          final detailReading = Reading(
+            type: 'Vitals',
+            value:
+            'HR: ${r.heartRate} bpm, BP: ${r.bp}, SpO₂: ${r.spo2}%, Sleep: ${_formatSleep(r.sleepMinutes)}, Stress: ${_formatStress(r.stressLevel)}, Water: ${_formatWater(r.waterIntakeLiters)}',
+            date: r.timestamp,
+            notes:
+            'Heart Rate: ${r.heartRate} bpm\n'
+                'Blood Pressure: ${r.bp}\n'
+                'SpO₂: ${r.spo2}%\n'
+                'Sleep: ${_formatSleep(r.sleepMinutes)}\n'
+                'Stress: ${_formatStress(r.stressLevel)}\n'
+                'Water Intake: ${_formatWater(r.waterIntakeLiters)}',
+          );
+
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 8, offset: const Offset(0, 4))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ],
             ),
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _getIconColor(r.type).withAlpha(26),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(_getIcon(r.type), color: _getIconColor(r.type)),
+                child: Icon(
+                  Icons.favorite,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
-              title: Text(r.type, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              subtitle: Text('${r.value} • ${r.date.toString().substring(0, 10)}', style: TextStyle(color: Colors.grey.shade600)),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              title: const Text(
+                'Vitals Record',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'HR ${r.heartRate} bpm • BP ${r.bp} • SpO₂ ${r.spo2}%\n'
+                      'Sleep ${_formatSleep(r.sleepMinutes)} • Stress ${_formatStress(r.stressLevel)} • Water ${_formatWater(r.waterIntakeLiters)}\n'
+                      '${r.timestamp.toString().substring(0, 16)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              isThreeLine: true,
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Theme.of(context).hintColor,
+              ),
               onTap: () {
                 Navigator.pushNamed(
                   context,
                   ReadingDetailScreen.routeName,
-                  arguments: r,
+                  arguments: detailReading,
                 );
               },
             ),
@@ -65,24 +130,56 @@ class ReadingsHistoryScreen extends StatelessWidget {
         onPressed: () {
           Navigator.pushNamed(context, AddManualReadingScreen.routeName);
         },
-        backgroundColor: const Color(0xFF8E9EFF),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Reading', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Add Reading',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
 
-  IconData _getIcon(String type) {
-    if (type.contains('Heart')) return Icons.favorite;
-    if (type.contains('Blood')) return Icons.bloodtype;
-    if (type.contains('Oxygen')) return Icons.air;
-    return Icons.monitor_weight;
-  }
-
-  Color _getIconColor(String type) {
-    if (type.contains('Heart')) return Colors.redAccent;
-    if (type.contains('Blood')) return Colors.blueAccent;
-    if (type.contains('Oxygen')) return Colors.teal;
-    return Colors.orangeAccent;
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.monitor_heart_outlined,
+              size: 72,
+              color: Theme.of(context).hintColor.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No readings found',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your saved vitals will appear here.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(context, AddManualReadingScreen.routeName);
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Reading'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

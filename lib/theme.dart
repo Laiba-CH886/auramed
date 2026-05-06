@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-const Color _deepLavender = Color(0xFF9A6BFF);
-const Color _accentPink = Color(0xFFFF91C2);
-const Color _bg = Color(0xFFFFFFFF);
+const Color auraPrimary = Color(0xFF9A6BFF);
+const Color auraAccent = Color(0xFFFF91C2);
 
-ThemeData buildAuraTheme() {
+ThemeData buildAuraLightTheme() {
   final base = ThemeData.light();
+
   return base.copyWith(
+    brightness: Brightness.light,
     colorScheme: base.colorScheme.copyWith(
-      primary: _deepLavender,
+      primary: auraPrimary,
       onPrimary: Colors.white,
-      secondary: _accentPink,
-      surface: _bg,
+      secondary: auraAccent,
+      onSecondary: Colors.white,
+      surface: Colors.white,
+      onSurface: Colors.black87,
       brightness: Brightness.light,
     ),
-    scaffoldBackgroundColor: _bg,
+    scaffoldBackgroundColor: const Color(0xFFF5F6FF),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.white,
+      foregroundColor: Colors.black87,
       elevation: 0,
       iconTheme: const IconThemeData(color: Colors.black87),
       titleTextStyle: GoogleFonts.poppins(
@@ -32,7 +36,7 @@ ThemeData buildAuraTheme() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: _deepLavender,
+        backgroundColor: auraPrimary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
@@ -43,11 +47,68 @@ ThemeData buildAuraTheme() {
       fillColor: const Color(0xFFF7F4FF),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
     ),
     cardTheme: CardThemeData(
       color: Colors.white,
-      elevation: 4,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+  );
+}
+
+ThemeData buildAuraDarkTheme() {
+  final base = ThemeData.dark();
+
+  return base.copyWith(
+    brightness: Brightness.dark,
+    colorScheme: base.colorScheme.copyWith(
+      primary: auraPrimary,
+      onPrimary: Colors.white,
+      secondary: auraAccent,
+      onSecondary: Colors.white,
+      surface: const Color(0xFF1E1E1E),
+      onSurface: Colors.white,
+      brightness: Brightness.dark,
+    ),
+    scaffoldBackgroundColor: const Color(0xFF121212),
+    appBarTheme: AppBarTheme(
+      backgroundColor: const Color(0xFF1A1A1A),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      iconTheme: const IconThemeData(color: Colors.white),
+      titleTextStyle: GoogleFonts.poppins(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    textTheme: GoogleFonts.poppinsTextTheme(base.textTheme).apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: auraPrimary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF242424),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF1E1E1E),
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
   );

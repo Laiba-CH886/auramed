@@ -32,6 +32,11 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
   int _spo2 = 0;
   String _bp = '--';
   int _steps = 0;
+
+  int _sleepMinutes = 0;
+  int _stressLevel = 0;
+  double _waterLiters = 0;
+
   DateTime? _lastUpdated;
 
   Timer? _refreshTimer;
@@ -48,46 +53,16 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
     super.dispose();
   }
 
-  // ── Auto check if already connected on screen open ────────────────────────
   Future<void> _autoCheckConnection() async {
     try {
-      final hasPerms = await _healthService.hasPermissions();
-      if (hasPerms && mounted) {
-        setState(() {
-          _isConnected = true;
-          _statusMessage = 'Connected to Health Connect ✓';
-        });
-        await _refreshData();
-        _startAutoRefresh();
-      }
-    } catch (e) {
-      debugPrint('ConnectDeviceScreen: autoCheck error: $e');
-    }
-  }
+      final vitals = await _healthService.getAllVitals();
 
-  // ── Connect & request permissions ────────────────────────────────────────
-  Future<void> _connectWatch() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = 'Requesting Health Connect permissions...';
-    });
-
-    try {
-      final hasPerms = await _healthService.hasPermissions();
-      if (hasPerms) {
-        setState(() {
-          _isConnected = true;
-          _statusMessage = 'Connected to Health Connect ✓';
-        });
-        await _refreshData();
-        _startAutoRefresh();
-        return;
-      }
-
-      final granted = await _healthService.requestPermissions();
       if (!mounted) return;
 
-      if (granted) {
+      final hasAnyData = vitals['hasData'] == true ||
+          (vitals['bp'] as String? ?? '--') != '--';
+
+      if (hasAnyData) {
         setState(() {
           _isConnected = true;
           _statusMessage = 'Connected to Health Connect ✓';
@@ -97,25 +72,62 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
       } else {
         setState(() {
           _isConnected = false;
-          _statusMessage =
-          'Permission denied. Please allow access in Health Connect settings.';
+          _statusMessage = 'Tap "Connect Watch" to start';
         });
-        _showError(
-            'Permission denied. Open Health Connect app and allow AuraMed to read health data.');
       }
+    } catch (e) {
+      debugPrint('ConnectDeviceScreen: autoCheck error: $e');
+    }
+  }
+
+  Future<void> _connectWatch() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Connecting to Health Connect...';
+    });
+
+    try {
+      final granted = await _healthService.requestPermissions();
+      if (!mounted) return;
+
+      if (!granted) {
+        setState(() {
+          _isConnected = false;
+          _statusMessage = 'Permission not granted';
+        });
+
+        _showError(
+          'Open Health Connect → App Permissions → AuraMed → Allow all required health data.',
+        );
+        return;
+      }
+
+      final vitals = await _healthService.getAllVitals();
+      if (!mounted) return;
+
+      debugPrint('ConnectDeviceScreen: vitals after connect = $vitals');
+
+      setState(() {
+        _isConnected = true;
+        _statusMessage = 'Connected to Health Connect ✓';
+      });
+
+      await _refreshData();
+      _startAutoRefresh();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isConnected = false;
-        _statusMessage = 'Connection failed. Try again.';
+        _statusMessage = 'Connection failed';
       });
       _showError('Failed to connect: ${e.toString()}');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // ── Refresh vitals ────────────────────────────────────────────────────────
   Future<void> _refreshData() async {
     if (!_isConnected) return;
     setState(() => _isSyncing = true);
@@ -123,11 +135,15 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
     try {
       final vitals = await _healthService.getAllVitals();
       if (!mounted) return;
+
       setState(() {
         _heartRate = vitals['heartRate'] as int? ?? 0;
         _spo2 = vitals['spo2'] as int? ?? 0;
         _bp = vitals['bp'] as String? ?? '--';
         _steps = vitals['steps'] as int? ?? 0;
+        _sleepMinutes = vitals['sleepMinutes'] as int? ?? 0;
+        _stressLevel = vitals['stressLevel'] as int? ?? 0;
+        _waterLiters = (vitals['waterLiters'] as num?)?.toDouble() ?? 0;
         _lastUpdated = DateTime.now();
         _statusMessage = vitals['hasData'] == true
             ? 'Live data from Galaxy Fit 3 ✓'
@@ -135,24 +151,35 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
       });
     } catch (e) {
       debugPrint('ConnectDeviceScreen: refreshData error: $e');
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = 'Connected, but no readable data found yet.';
+      });
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }
   }
 
-  // ── Auto refresh every 60 seconds ────────────────────────────────────────
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (_isConnected && mounted) _refreshData();
+      if (_isConnected && mounted) {
+        _refreshData();
+      }
     });
   }
 
-  // ── Save to Firebase ──────────────────────────────────────────────────────
   Future<void> _saveToFirebase() async {
-    if (_heartRate == 0 && _spo2 == 0 && _bp == '--') {
+    if (_heartRate == 0 &&
+        _spo2 == 0 &&
+        _bp == '--' &&
+        _steps == 0 &&
+        _sleepMinutes == 0 &&
+        _stressLevel == 0 &&
+        _waterLiters == 0) {
       _showError(
-          'No health data to save. Sync your Galaxy Fit 3 with Samsung Health first.');
+        'No health data to save. Sync your Galaxy Fit 3 with Samsung Health first.',
+      );
       return;
     }
 
@@ -167,6 +194,16 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
         return;
       }
 
+      final reading = PatientReading(
+        heartRate: _heartRate,
+        bp: _bp,
+        spo2: _spo2,
+        sleepMinutes: _sleepMinutes,
+        stressLevel: _stressLevel,
+        waterIntakeLiters: _waterLiters,
+        timestamp: DateTime.now(),
+      );
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -176,18 +213,15 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
         'bp': _bp,
         'spo2': _spo2,
         'steps': _steps,
+        'sleepMinutes': _sleepMinutes,
+        'stressLevel': _stressLevel,
+        'waterIntakeLiters': _waterLiters,
         'source': 'samsung_galaxy_fit3',
         'timestamp': DateTime.now().toIso8601String(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Update local AuthProvider readings
-      auth.addReading(PatientReading(
-        heartRate: _heartRate,
-        bp: _bp,
-        spo2: _spo2,
-        timestamp: DateTime.now(),
-      ));
+      await auth.addReading(reading, fromWatch: true);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,11 +240,14 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: Colors.red,
-      duration: const Duration(seconds: 4),
-    ));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   String _formatTime(DateTime dt) {
@@ -218,6 +255,18 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
     final m = dt.minute.toString().padLeft(2, '0');
     final s = dt.second.toString().padLeft(2, '0');
     return '$h:$m:$s';
+  }
+
+  String _formatSleep(int minutes) {
+    if (minutes <= 0) return '--';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return '${h}h ${m}m';
+  }
+
+  String _formatWater(double liters) {
+    if (liters <= 0) return '--';
+    return '${liters.toStringAsFixed(1)}';
   }
 
   @override
@@ -234,9 +283,10 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
             IconButton(
               icon: _isSyncing
                   ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
                   : const Icon(Icons.refresh),
               onPressed: _isSyncing ? null : _refreshData,
               tooltip: 'Refresh data',
@@ -248,8 +298,6 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-
-            // ── Watch status card ───────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -258,35 +306,32 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                   colors: _isConnected
                       ? [
                     const Color(0xFF43A047),
-                    const Color(0xFF66BB6A)
+                    const Color(0xFF66BB6A),
                   ]
                       : [
                     const Color(0xFF8E9EFF),
-                    const Color(0xFFB2C2FF)
+                    const Color(0xFFB2C2FF),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: const [
                   BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 10,
-                      offset: Offset(0, 4))
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  )
                 ],
               ),
               child: Column(
                 children: [
                   Icon(
-                    _isConnected
-                        ? Icons.watch
-                        : Icons.watch_outlined,
+                    _isConnected ? Icons.watch : Icons.watch_outlined,
                     size: 64,
                     color: Colors.white,
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    _isConnected
-                        ? 'Samsung Galaxy Fit 3'
-                        : 'No Watch Connected',
+                    _isConnected ? 'Samsung Galaxy Fit 3' : 'No Watch Connected',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -315,10 +360,7 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // ── Connect button (shown when not connected) ───────────
             if (!_isConnected)
               SizedBox(
                 width: double.infinity,
@@ -327,40 +369,43 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                   onPressed: _isLoading ? null : _connectWatch,
                   icon: _isLoading
                       ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                       : const Icon(Icons.link, color: Colors.white),
                   label: Text(
                     _isLoading ? 'Connecting...' : 'Connect Watch',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8E9EFF),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
-
-            // ── Live vitals (shown when connected) ──────────────────
             if (_isConnected) ...[
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Live Vitals from Galaxy Fit 3',
+                  'Live Health Data',
                   style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -401,19 +446,35 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                     unit: 'steps',
                     bgColor: Colors.green.shade50,
                   ),
+                  _VitalCard(
+                    icon: Icons.bedtime,
+                    iconColor: Colors.indigo,
+                    label: 'Sleep',
+                    value: _formatSleep(_sleepMinutes),
+                    unit: '',
+                    bgColor: Colors.indigo.shade50,
+                  ),
+                  _VitalCard(
+                    icon: Icons.psychology,
+                    iconColor: Colors.deepPurple,
+                    label: 'Stress',
+                    value: _stressLevel > 0 ? '$_stressLevel' : '--',
+                    unit: '%',
+                    bgColor: Colors.deepPurple.shade50,
+                  ),
+                  _VitalCard(
+                    icon: Icons.local_drink,
+                    iconColor: Colors.cyan.shade700,
+                    label: 'Water Intake',
+                    value: _formatWater(_waterLiters),
+                    unit: 'L',
+                    bgColor: Colors.cyan.shade50,
+                  ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Health status
-              if (_heartRate > 0)
-                _HealthStatusCard(
-                    heartRate: _heartRate, spo2: _spo2),
-
+              if (_heartRate > 0 || _spo2 > 0) _HealthStatusCard(heartRate: _heartRate, spo2: _spo2),
               const SizedBox(height: 20),
-
-              // Action buttons
               Row(
                 children: [
                   Expanded(
@@ -421,18 +482,17 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                       onPressed: _isSyncing ? null : _refreshData,
                       icon: _isSyncing
                           ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2))
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                           : const Icon(Icons.sync),
-                      label: Text(
-                          _isSyncing ? 'Syncing...' : 'Refresh'),
+                      label: Text(_isSyncing ? 'Syncing...' : 'Refresh'),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -442,32 +502,30 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                       onPressed: _isSaving ? null : _saveToFirebase,
                       icon: _isSaving
                           ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white))
-                          : const Icon(Icons.cloud_upload,
-                          color: Colors.white),
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : const Icon(Icons.cloud_upload, color: Colors.white),
                       label: Text(
                         _isSaving ? 'Saving...' : 'Save to Cloud',
-                        style:
-                        const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF8E9EFF),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -482,23 +540,19 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Data auto-refreshes every 60 seconds. '
-                            'Tap "Save to Cloud" to share readings with your doctor.',
+                        'Data auto-refreshes every 60 seconds. Tap "Save to Cloud" to share readings with your doctor.',
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue.shade800),
+                          fontSize: 12,
+                          color: Colors.blue.shade800,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ],
-
             const SizedBox(height: 20),
-
-            // How it works (shown when not connected)
             if (!_isConnected) const _HowItWorksCard(),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -507,7 +561,6 @@ class _ConnectDeviceScreenState extends State<ConnectDeviceScreen> {
   }
 }
 
-// ── Vital Card ────────────────────────────────────────────────────────────────
 class _VitalCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -527,6 +580,7 @@ class _VitalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final suffix = unit.isNotEmpty ? ' • $unit' : '';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -534,9 +588,10 @@ class _VitalCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-              offset: Offset(0, 2))
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          )
         ],
       ),
       child: Column(
@@ -556,9 +611,11 @@ class _VitalCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '$label • $unit',
+                '$label$suffix',
                 style: TextStyle(
-                    fontSize: 11, color: Colors.grey.shade600),
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ],
           ),
@@ -568,13 +625,14 @@ class _VitalCard extends StatelessWidget {
   }
 }
 
-// ── Health Status Card ────────────────────────────────────────────────────────
 class _HealthStatusCard extends StatelessWidget {
   final int heartRate;
   final int spo2;
 
-  const _HealthStatusCard(
-      {required this.heartRate, required this.spo2});
+  const _HealthStatusCard({
+    required this.heartRate,
+    required this.spo2,
+  });
 
   String get _status {
     if (heartRate > 100) return '⚠️ High Heart Rate';
@@ -600,8 +658,7 @@ class _HealthStatusCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border:
-        Border.all(color: _statusColor.withValues(alpha: 0.3)),
+        border: Border.all(color: _statusColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -621,7 +678,6 @@ class _HealthStatusCard extends StatelessWidget {
   }
 }
 
-// ── How It Works Card ─────────────────────────────────────────────────────────
 class _HowItWorksCard extends StatelessWidget {
   const _HowItWorksCard();
 
@@ -635,9 +691,10 @@ class _HowItWorksCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 3))
+            color: Colors.black12,
+            blurRadius: 6,
+            offset: Offset(0, 3),
+          )
         ],
       ),
       child: Column(
@@ -646,16 +703,15 @@ class _HowItWorksCard extends StatelessWidget {
           const Text(
             'How it works',
             style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold),
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 12),
-          _step('1',
-              'Make sure Galaxy Fit 3 is synced with Samsung Health'),
-          _step('2',
-              'Tap "Connect Watch" and allow Health Connect permissions'),
+          _step('1', 'Make sure Galaxy Fit 3 is synced with Samsung Health'),
+          _step('2', 'Tap "Connect Watch" and allow Health Connect permissions'),
           _step('3', 'Your live vitals appear automatically'),
-          _step('4',
-              'Tap "Save to Cloud" to share readings with your doctor'),
+          _step('4', 'Tap "Save to Cloud" to share readings with your doctor'),
         ],
       ),
     );
@@ -670,17 +726,21 @@ class _HowItWorksCard extends StatelessWidget {
           CircleAvatar(
             radius: 12,
             backgroundColor: const Color(0xFF8E9EFF),
-            child: Text(number,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold)),
+            child: Text(
+              number,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text,
-                style:
-                const TextStyle(fontSize: 13, height: 1.4)),
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, height: 1.4),
+            ),
           ),
         ],
       ),

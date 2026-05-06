@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:auramed/providers/auth_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   static const routeName = '/notifications';
+
   const NotificationsScreen({super.key});
 
   @override
@@ -9,37 +12,115 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _appts = true;
-  bool _chat = true;
-  bool _reminders = false;
-  bool _email = true;
+  bool _isSavingAppointment = false;
+  bool _isSavingChat = false;
+  bool _isSavingReminders = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      auth.loadNotificationSettings();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
+    final settings = auth.notificationSettings;
+    final isLoading = auth.isNotificationSettingsLoading;
+    final accent = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FF),
       appBar: AppBar(
         title: const Text("Notification Settings"),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
       ),
-      body: ListView(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildNotificationSection(
+            context,
             "App Alerts",
+            accent,
             [
-              _buildSwitchTile("Appointment Alerts", "Get notified about status changes", _appts, (v) => setState(() => _appts = v)),
-              _buildSwitchTile("Chat Messages", "New messages from your doctor", _chat, (v) => setState(() => _chat = v)),
-              _buildSwitchTile("Health Reminders", "Daily vitals and checkup alerts", _reminders, (v) => setState(() => _reminders = v)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildNotificationSection(
-            "External Alerts",
-            [
-              _buildSwitchTile("Email Notifications", "Weekly health summary and reports", _email, (v) => setState(() => _email = v)),
+              _buildSwitchTile(
+                context: context,
+                title: "Appointment Alerts",
+                subtitle: "Show alerts related to appointments",
+                value: settings.appointmentAlerts,
+                isSaving: _isSavingAppointment,
+                onChanged: (v) async {
+                  setState(() => _isSavingAppointment = true);
+                  final ok = await auth.updateNotificationSetting(
+                    appointmentAlerts: v,
+                  );
+                  if (!mounted) return;
+                  setState(() => _isSavingAppointment = false);
+
+                  if (!ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Failed to update Appointment Alerts',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: "Chat Messages",
+                subtitle: "Show alerts when doctor sends a message",
+                value: settings.chatMessages,
+                isSaving: _isSavingChat,
+                onChanged: (v) async {
+                  setState(() => _isSavingChat = true);
+                  final ok = await auth.updateNotificationSetting(
+                    chatMessages: v,
+                  );
+                  if (!mounted) return;
+                  setState(() => _isSavingChat = false);
+
+                  if (!ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Failed to update Chat Messages',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: "Health Reminders",
+                subtitle: "Daily vitals and checkup alerts",
+                value: settings.healthReminders,
+                isSaving: _isSavingReminders,
+                onChanged: (v) async {
+                  setState(() => _isSavingReminders = true);
+                  final ok = await auth.updateNotificationSetting(
+                    healthReminders: v,
+                  );
+                  if (!mounted) return;
+                  setState(() => _isSavingReminders = false);
+
+                  if (!ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Failed to update Health Reminders',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
             ],
           ),
         ],
@@ -47,30 +128,63 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationSection(String title, List<Widget> children) {
+  Widget _buildNotificationSection(
+      BuildContext context,
+      String title,
+      Color accentColor,
+      List<Widget> children,
+      ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 8, bottom: 12),
-          child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF8E9EFF))),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: accentColor,
+            ),
+          ),
         ),
         Card(
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(children: children),
         ),
       ],
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, bool value, Function(bool) onChanged) {
+  Widget _buildSwitchTile({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required bool isSaving,
+    required Future<void> Function(bool) onChanged,
+  }) {
     return SwitchListTile(
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       value: value,
-      activeColor: const Color(0xFF8E9EFF),
-      onChanged: onChanged,
+      onChanged: isSaving ? null : onChanged,
+      secondary: isSaving
+          ? const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      )
+          : null,
     );
   }
 }

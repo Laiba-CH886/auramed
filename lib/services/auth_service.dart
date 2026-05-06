@@ -1,6 +1,3 @@
-// auth_service.dart - DEBUG VERSION
-// Replace with this temporarily to see exact error in console
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -18,36 +15,23 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // ── DEBUG: print exactly what we receive ──
-    print('=== LOGIN ATTEMPT ===');
-    print('Email: "$email"');
-    print('Password length: ${password.length}');
-    print('Email trimmed: "${email.trim()}"');
-
     try {
-      print('Calling Firebase signInWithEmailAndPassword...');
-
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
-      print('Firebase Auth SUCCESS');
-      print('UID: ${credential.user?.uid}');
-      print('Email verified: ${credential.user?.emailVerified}');
-
       final user = credential.user;
       if (user == null) {
-        print('ERROR: user is null after successful auth');
-        return {'success': false, 'message': 'Sign-in failed. Please try again.'};
+        return {
+          'success': false,
+          'message': 'Sign-in failed. Please try again.',
+        };
       }
 
-      print('Fetching Firestore role for uid: ${user.uid}');
       final role = await _getUserRole(user.uid);
-      print('Role from Firestore: "$role"');
 
       if (role == 'unknown') {
-        print('ERROR: role is unknown — Firestore doc missing or no role field');
         await _auth.signOut();
         return {
           'success': false,
@@ -55,29 +39,23 @@ class AuthService {
         };
       }
 
-      print('=== LOGIN SUCCESS, role: $role ===');
-
       _sendLoginNotificationEmail(
         toEmail: user.email ?? email,
         role: role,
         loginMethod: 'Email & Password',
       );
 
-      return {'success': true, 'role': role, 'uid': user.uid};
-
+      return {
+        'success': true,
+        'role': role,
+        'uid': user.uid,
+      };
     } on FirebaseAuthException catch (e) {
-      // ── DEBUG: print full Firebase error ──
-      print('=== FIREBASE AUTH ERROR ===');
-      print('Code: ${e.code}');
-      print('Message: ${e.message}');
-      print('Details: ${e.toString()}');
-      return {'success': false, 'message': _friendlyAuthError(e)};
-
-    } catch (e, stackTrace) {
-      // ── DEBUG: print unexpected error ──
-      print('=== UNEXPECTED ERROR ===');
-      print('Error: $e');
-      print('StackTrace: $stackTrace');
+      return {
+        'success': false,
+        'message': _friendlyAuthError(e),
+      };
+    } catch (e) {
       return {
         'success': false,
         'message': 'Unexpected error: ${e.toString()}',
@@ -90,18 +68,22 @@ class AuthService {
     try {
       await _googleSignIn.signOut();
       final googleUser = await _googleSignIn.signIn();
+
       if (googleUser == null) {
-        return {'success': false, 'message': 'Sign in canceled'};
+        return {
+          'success': false,
+          'message': 'Sign in canceled',
+        };
       }
 
       GoogleSignInAuthentication googleAuth;
       try {
         googleAuth = await googleUser.authentication;
-      } on TypeError catch (typeError) {
+      } on TypeError {
         return {
           'success': false,
-          'message': 'Google Sign-In failed due to a plugin compatibility issue. '
-              'Please update the app or use Email login. (Detail: $typeError)',
+          'message':
+          'Google Sign-In failed. Please update the app or use Email login.',
         };
       }
 
@@ -112,43 +94,66 @@ class AuthService {
 
       final userCredential = await _auth.signInWithCredential(oauthCredential);
       final user = userCredential.user;
+
       if (user == null) {
-        return {'success': false, 'message': 'Google sign-in failed. Please try again.'};
+        return {
+          'success': false,
+          'message': 'Google sign-in failed. Please try again.',
+        };
       }
 
       final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
       String resolvedRole;
 
+      final defaultNotificationSettings = {
+        'appointmentAlerts': true,
+        'chatMessages': true,
+        'healthReminders': false,
+      };
+
+      final defaultAppearanceSettings = {
+        'themeMode': 'system',
+      };
+
       if (isNewUser) {
         resolvedRole = role;
+
         await _firestore.collection('users').doc(user.uid).set({
           'uid': user.uid,
           'email': user.email ?? '',
           'name': user.displayName ?? '',
           'photoUrl': user.photoURL ?? '',
           'role': role,
+          'notificationSettings': defaultNotificationSettings,
+          'appearanceSettings': defaultAppearanceSettings,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLoginAt': FieldValue.serverTimestamp(),
           'authProvider': 'google',
         });
       } else {
         resolvedRole = await _getUserRole(user.uid);
+
         if (resolvedRole == 'unknown') {
           resolvedRole = role;
+
           await _firestore.collection('users').doc(user.uid).set({
             'uid': user.uid,
             'email': user.email ?? '',
             'name': user.displayName ?? '',
             'photoUrl': user.photoURL ?? '',
             'role': role,
+            'notificationSettings': defaultNotificationSettings,
+            'appearanceSettings': defaultAppearanceSettings,
             'createdAt': FieldValue.serverTimestamp(),
             'lastLoginAt': FieldValue.serverTimestamp(),
             'authProvider': 'google',
           });
         } else {
-          await _firestore.collection('users').doc(user.uid).update({
+          await _firestore.collection('users').doc(user.uid).set({
             'lastLoginAt': FieldValue.serverTimestamp(),
-          });
+            'notificationSettings': defaultNotificationSettings,
+            'appearanceSettings': defaultAppearanceSettings,
+          }, SetOptions(merge: true));
         }
       }
 
@@ -165,28 +170,82 @@ class AuthService {
         'uid': user.uid,
       };
     } on FirebaseAuthException catch (e) {
-      return {'success': false, 'message': _friendlyAuthError(e)};
-    } on TypeError catch (typeError) {
       return {
         'success': false,
-        'message': 'Google Sign-In failed due to a plugin compatibility issue. '
-            'Please use Email login or update the app. (Detail: $typeError)',
+        'message': _friendlyAuthError(e),
       };
     } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('ApiException: 10') || msg.contains('sign_in_failed')) {
-        return {
-          'success': false,
-          'message': 'Google Sign-In is not configured. Please add SHA-1 to Firebase.',
-        };
-      }
-      return {'success': false, 'message': 'Google sign-in failed: $msg'};
+      return {
+        'success': false,
+        'message': 'Google sign-in failed: ${e.toString()}',
+      };
     }
   }
 
-  // ── Password Reset ────────────────────────────────────────────────────────
-  Future<void> sendPasswordResetEmail({required String email}) async {
-    await _auth.sendPasswordResetEmail(email: email.trim());
+  // ── Password Reset (Direct - Requires Current Password) ──────────────────
+  Future<Map<String, dynamic>> resetPasswordDirect({
+    required String email,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: oldPassword,
+      );
+
+      final user = credential.user;
+      if (user == null) {
+        return {
+          'success': false,
+          'message': 'Invalid credentials.',
+        };
+      }
+
+      try {
+        await user.updatePassword(newPassword);
+        await _auth.signOut();
+
+        return {
+          'success': true,
+          'message': 'Password reset successfully!',
+        };
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'requires-recent-login') {
+          return {
+            'success': false,
+            'message': 'Please try again in a moment.',
+          };
+        }
+
+        return {
+          'success': false,
+          'message': 'Failed to update password: ${e.message}',
+        };
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        return {
+          'success': false,
+          'message': 'No account found with this email.',
+        };
+      } else if (e.code == 'wrong-password') {
+        return {
+          'success': false,
+          'message': 'Current password is incorrect.',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': _friendlyAuthError(e),
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An error occurred. Please try again.',
+      };
+    }
   }
 
   // ── Sign Out ──────────────────────────────────────────────────────────────
@@ -199,14 +258,11 @@ class AuthService {
   Future<String> _getUserRole(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      print('Firestore doc exists: ${doc.exists}');
       if (doc.exists) {
-        print('Firestore doc data: ${doc.data()}');
         return doc.data()?['role'] as String? ?? 'unknown';
       }
       return 'unknown';
     } catch (e) {
-      print('Firestore error: $e');
       return 'unknown';
     }
   }
@@ -218,10 +274,11 @@ class AuthService {
     required String loginMethod,
   }) {
     if (toEmail.isEmpty) return;
+
     final roleName = role[0].toUpperCase() + role.substring(1);
     final now = DateTime.now().toUtc();
-    final timeStr = '${now.year}-${_pad(now.month)}-${_pad(now.day)} '
-        '${_pad(now.hour)}:${_pad(now.minute)} UTC';
+    final timeStr =
+        '${now.year}-${_pad(now.month)}-${_pad(now.day)} ${_pad(now.hour)}:${_pad(now.minute)} UTC';
 
     _firestore.collection('mail').add({
       'to': [toEmail],
@@ -275,10 +332,7 @@ class AuthService {
                           border-left:4px solid #FF9800;">
               <tr><td style="padding:16px;">
                 <p style="margin:0;color:#E65100;font-size:13px;line-height:1.5;">
-                  ⚠️ <strong>Wasn't you?</strong> Contact
-                  <a href="mailto:support@auramed.example" style="color:#E65100;">
-                    support immediately
-                  </a> and change your password.
+                  ⚠️ <strong>Wasn't you?</strong> Contact support immediately and change your password.
                 </p>
               </td></tr>
             </table>
@@ -296,7 +350,8 @@ class AuthService {
     </td></tr>
   </table>
 </body>
-</html>''',
+</html>
+''',
       },
       'createdAt': FieldValue.serverTimestamp(),
     }).catchError((_) {});
@@ -304,12 +359,13 @@ class AuthService {
 
   String _pad(int n) => n.toString().padLeft(2, '0');
 
+  // ── Error Message Handlers ────────────────────────────────────────────────
   String _friendlyAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
         return 'No account found with this email. Please sign up first.';
       case 'wrong-password':
-        return 'Incorrect password. Please try again or use Forgot Password.';
+        return 'Incorrect password. Please try again.';
       case 'invalid-credential':
         return 'Incorrect email or password. Please check and try again.';
       case 'invalid-email':
@@ -326,8 +382,6 @@ class AuthService {
         return 'This sign-in method is not enabled. Contact support.';
       case 'network-request-failed':
         return 'Network error. Please check your internet connection.';
-      case 'account-exists-with-different-credential':
-        return 'An account exists with this email using a different sign-in method.';
       default:
         return e.message ?? 'Authentication failed. Please try again.';
     }

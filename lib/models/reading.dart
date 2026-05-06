@@ -3,12 +3,18 @@ class PatientReading {
   final int heartRate;
   final String bp;
   final int spo2;
+  final int? sleepMinutes;
+  final int? stressLevel;
+  final double? waterIntakeLiters;
 
   PatientReading({
     required this.timestamp,
     required this.heartRate,
     required this.bp,
     required this.spo2,
+    this.sleepMinutes,
+    this.stressLevel,
+    this.waterIntakeLiters,
   });
 }
 

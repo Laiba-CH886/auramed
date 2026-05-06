@@ -85,19 +85,17 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Firebase Auth
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
       final user = credential.user;
       if (user == null) throw Exception('Account creation failed.');
 
-      // 2. Display name
       await user.updateDisplayName(_nameController.text.trim());
 
-      // 3. Firestore doc with role: 'doctor'
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'uid': user.uid,
         'name': _nameController.text.trim(),
@@ -113,12 +111,10 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
         'photoUrl': '',
       });
 
-      // 4. ✅ Sync AuthProvider so dashboard shows correct user immediately
       if (!mounted) return;
       await Provider.of<AuthProvider>(context, listen: false)
           .login(_emailController.text.trim(), _passwordController.text);
 
-      // 5. Welcome email (non-fatal)
       _sendWelcomeEmail(
         toEmail: _emailController.text.trim(),
         name: _nameController.text.trim(),
@@ -126,11 +122,13 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Doctor account created successfully! Welcome 🩺'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Doctor account created successfully! Welcome 🩺'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
       Navigator.pushReplacementNamed(context, DoctorDashboard.routeName);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -143,7 +141,11 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
     }
   }
 
-  void _sendWelcomeEmail({required String toEmail, required String name, required String specialization}) {
+  void _sendWelcomeEmail({
+    required String toEmail,
+    required String name,
+    required String specialization,
+  }) {
     FirebaseFirestore.instance.collection('mail').add({
       'to': [toEmail],
       'message': {
@@ -171,11 +173,13 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: Colors.red,
-      duration: const Duration(seconds: 4),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   @override
@@ -194,16 +198,22 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(
-              horizontal: isWide ? width * 0.2 : 20, vertical: 20),
+            horizontal: isWide ? width * 0.2 : 20,
+            vertical: 20,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
-              const Text('Doctor Registration',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+              const Text(
+                'Doctor Registration',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 6),
-              Text('Register as a verified doctor to access the platform',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text(
+                'Register as a verified doctor to access the platform',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(20),
@@ -211,7 +221,11 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, 4))
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.07),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    )
                   ],
                 ),
                 child: Form(
@@ -221,19 +235,62 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
                     children: [
                       _sectionLabel('Personal Information'),
                       const SizedBox(height: 10),
-                      _buildField(controller: _nameController, hint: 'Full Name', icon: Icons.person_outline, validator: _validateName),
-                      _buildField(controller: _emailController, hint: 'Email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, validator: _validateEmail),
-                      _buildField(controller: _phoneController, hint: 'Phone Number', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, validator: _validatePhone),
+                      _buildField(
+                        controller: _nameController,
+                        hint: 'Full Name',
+                        icon: Icons.person_outline,
+                        validator: _validateName,
+                      ),
+                      _buildField(
+                        controller: _emailController,
+                        hint: 'Email',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
+                      ),
+                      _buildField(
+                        controller: _phoneController,
+                        hint: 'Phone Number',
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        validator: _validatePhone,
+                      ),
                       const SizedBox(height: 6),
                       _sectionLabel('Professional Information'),
                       const SizedBox(height: 10),
-                      _buildField(controller: _specializationController, hint: 'Specialization (e.g. Cardiologist)', icon: Icons.local_hospital_outlined, validator: (v) => _validateNotEmpty(v, 'Specialization')),
-                      _buildField(controller: _pmdcController, hint: 'PMDC Registration Number', icon: Icons.badge_outlined, validator: _validatePmdc),
+                      _buildField(
+                        controller: _specializationController,
+                        hint: 'Specialization (e.g. Cardiologist)',
+                        icon: Icons.local_hospital_outlined,
+                        validator: (v) => _validateNotEmpty(v, 'Specialization'),
+                      ),
+                      _buildField(
+                        controller: _pmdcController,
+                        hint: 'PMDC Registration Number',
+                        icon: Icons.badge_outlined,
+                        validator: _validatePmdc,
+                      ),
                       const SizedBox(height: 6),
                       _sectionLabel('Security'),
                       const SizedBox(height: 10),
-                      _buildPasswordField(controller: _passwordController, hint: 'Password', obscure: _obscurePassword, onToggle: () => setState(() => _obscurePassword = !_obscurePassword), validator: _validatePassword),
-                      _buildPasswordField(controller: _confirmPasswordController, hint: 'Confirm Password', obscure: _obscureConfirm, onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm), validator: _validateConfirmPassword),
+                      _buildPasswordField(
+                        controller: _passwordController,
+                        hint: 'Password',
+                        obscure: _obscurePassword,
+                        onToggle: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                        ),
+                        validator: _validatePassword,
+                      ),
+                      _buildPasswordField(
+                        controller: _confirmPasswordController,
+                        hint: 'Confirm Password',
+                        obscure: _obscureConfirm,
+                        onToggle: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                        ),
+                        validator: _validateConfirmPassword,
+                      ),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -243,10 +300,19 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
                             : ElevatedButton(
                           onPressed: _submit,
                           style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurple,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                          child: const Text('Register as Doctor',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            backgroundColor: Colors.deepPurple,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Register as Doctor',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -257,16 +323,25 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.amber.shade200),
                         ),
-                        child: Row(children: [
-                          Icon(Icons.info_outline, color: Colors.amber.shade800, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Your PMDC number will be verified by our team before full access is granted.',
-                              style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.amber.shade800,
+                              size: 18,
                             ),
-                          ),
-                        ]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Your PMDC number will be verified by our team before full access is granted.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -276,8 +351,10 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
               Center(
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Already have an account? Login',
-                      style: TextStyle(color: Colors.deepPurple)),
+                  child: const Text(
+                    'Already have an account? Login',
+                    style: TextStyle(color: Colors.deepPurple),
+                  ),
                 ),
               ),
             ],
@@ -287,10 +364,25 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
     );
   }
 
-  Widget _sectionLabel(String label) => Text(label,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.deepPurple, letterSpacing: 0.5));
+  Widget _sectionLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: Colors.deepPurple,
+        letterSpacing: 0.5,
+      ),
+    );
+  }
 
-  Widget _buildField({required TextEditingController controller, required String hint, required IconData icon, TextInputType keyboardType = TextInputType.text, String? Function(String?)? validator}) {
+  Widget _buildField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
@@ -302,16 +394,32 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
           hintText: hint,
           filled: true,
           fillColor: Colors.grey.shade50,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5)),
+          contentPadding:
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPasswordField({required TextEditingController controller, required String hint, required bool obscure, required VoidCallback onToggle, String? Function(String?)? validator}) {
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String hint,
+    required bool obscure,
+    required VoidCallback onToggle,
+    String? Function(String?)? validator,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
@@ -321,16 +429,31 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
         decoration: InputDecoration(
           prefixIcon: const Icon(Icons.lock_outline, color: Colors.deepPurple),
           suffixIcon: IconButton(
-            icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.grey),
+            icon: Icon(
+              obscure
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+              color: Colors.grey,
+            ),
             onPressed: onToggle,
           ),
           hintText: hint,
           filled: true,
           fillColor: Colors.grey.shade50,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5)),
+          contentPadding:
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5),
+          ),
         ),
       ),
     );

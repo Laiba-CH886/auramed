@@ -7,7 +7,8 @@
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
-    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE"/>
+    <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- ✅ Basic permissions -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
@@ -34,7 +35,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- ✅ Health Connect Rationale Intent Filter -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+
+        <!-- ✅ Health Connect rationale metadata — must point to the activity with the intent filter -->
+        <meta-data android:name="health_permissions_show_rationale" android:value="com.auramed.app.MainActivity" />
 
         <!-- ✅ Health Connect intent filter — required for permission screen -->
         <activity-alias
